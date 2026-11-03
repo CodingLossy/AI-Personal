@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 尹绪柏 (Theodore Yin)
 
-export { classifyStatus, createOpenAICompatibleProvider, type OpenAICompatibleOptions } from './openai-compatible.js';
+export {
+    classifyStatus,
+    createOpenAICompatibleProvider,
+    toWireToolName,
+    type OpenAICompatibleOptions,
+} from './openai-compatible.js';
 export { REDACTED, Redactor, sanitizeUpstreamText } from './redact.js';
 export { createProvider, selectProfile, type ProviderDeps } from './registry.js';
 export {
