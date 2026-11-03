@@ -131,6 +131,54 @@ describe('OpenAI 兼容流式(录制回放)', () => {
     });
 });
 
+describe('DeepSeek 真实录制(回放)', () => {
+    const deepseek = (over: Partial<ProviderProfile> = {}) =>
+        profile({ baseURL: 'https://api.deepseek.com/v1', model: 'deepseek-chat', ...over });
+
+    it('流式对话:中文文本与 usage', async () => {
+        const replay = createReplayFetch(loadFixture(fixture('deepseek-chat-stream')));
+        const { p } = provider(replay.fetch, deepseek());
+        const chunks = await collect(p.stream({ messages: [{ role: 'user', content: '请只回复四个字:你好世界' }] }));
+        expect(text(chunks)).toBe('你好世界');
+        const finish = chunks.at(-1) as Extract<ChatChunk, { type: 'finish' }>;
+        expect(finish.reason).toBe('stop');
+        expect(finish.usage?.inputTokens).toBeGreaterThan(0);
+        expect(finish.usage?.outputTokens).toBeGreaterThan(0);
+    });
+
+    it('工具调用:发送时用 memory__save,收到后还原为 memory.save', async () => {
+        const replay = createReplayFetch(loadFixture(fixture('deepseek-tool-call-stream')));
+        const { p } = provider(replay.fetch, deepseek());
+        const chunks = await collect(
+            p.stream({
+                messages: [{ role: 'user', content: 'Please remember: I live in Hangzhou.' }],
+                tools: [{ name: 'memory.save', description: 'save', parameters: { type: 'object' } }],
+            }),
+        );
+        const calls = chunks.filter((c) => c.type === 'tool-call');
+        expect(calls).toHaveLength(1);
+        expect(calls[0]).toMatchObject({ name: 'memory.save' });
+        expect(JSON.stringify((calls[0] as { input: unknown }).input)).toMatch(/Hangzhou/);
+        expect(chunks.at(-1)).toMatchObject({ type: 'finish', reason: 'tool-calls' });
+        const sent = replay.calls[0]!.body as { tools: { function: { name: string } }[] };
+        expect(sent.tools[0]!.function.name).toBe('memory__save');
+    });
+
+    it('连接测试与无效密钥', async () => {
+        const models = createReplayFetch(loadFixture(fixture('deepseek-models')));
+        const ok = await provider(models.fetch, deepseek()).p.test();
+        expect(ok.ok).toBe(true);
+        if (ok.ok) expect(ok.models!.length).toBeGreaterThan(0);
+
+        const denied = createReplayFetch(loadFixture(fixture('deepseek-auth-error')));
+        const error = (await collect(provider(denied.fetch, deepseek()).p.stream({ messages: [] })).catch(
+            (e: unknown) => e,
+        )) as ProviderError;
+        expect(error.code).toBe('auth_failed');
+        expect(error.status).toBe(401);
+    });
+});
+
 describe('错误、重试与取消', () => {
     it.each([
         [401, 'auth_failed'],

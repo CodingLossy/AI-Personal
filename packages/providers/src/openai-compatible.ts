@@ -41,6 +41,14 @@ export function classifyStatus(status: number): ProviderErrorCode {
     return 'upstream_error';
 }
 
+/**
+ * OpenAI 协议要求函数名匹配 ^[a-zA-Z0-9_-]{1,64}$,而我们的工具名带点号(如 memory.save)。
+ * 发送前把不允许的字符替换为 "__",收到工具调用时再按本次请求的映射还原。
+ */
+export function toWireToolName(name: string): string {
+    return name.replace(/[^A-Za-z0-9_-]/g, '__').slice(0, 64);
+}
+
 function toWireMessage(m: ChatMessage): Record<string, unknown> {
     switch (m.role) {
         case 'assistant':
@@ -51,7 +59,7 @@ function toWireMessage(m: ChatMessage): Record<string, unknown> {
                       tool_calls: m.toolCalls.map((c) => ({
                           id: c.callId,
                           type: 'function',
-                          function: { name: c.name, arguments: JSON.stringify(c.input ?? {}) },
+                          function: { name: toWireToolName(c.name), arguments: JSON.stringify(c.input ?? {}) },
                       })),
                   }
                 : { role: 'assistant', content: m.content };
@@ -223,11 +231,16 @@ export function createOpenAICompatibleProvider(options: OpenAICompatibleOptions)
             stream: true,
             stream_options: { include_usage: true },
         };
+        const toolNames = new Map<string, string>();
         if (request.tools?.length) {
-            body.tools = request.tools.map((t) => ({
-                type: 'function',
-                function: { name: t.name, description: t.description, parameters: t.parameters },
-            }));
+            body.tools = request.tools.map((t) => {
+                const wire = toWireToolName(t.name);
+                toolNames.set(wire, t.name);
+                return {
+                    type: 'function',
+                    function: { name: wire, description: t.description, parameters: t.parameters },
+                };
+            });
         }
         if (profile.params?.temperature !== undefined) body.temperature = profile.params.temperature;
         if (profile.params?.maxOutputTokens !== undefined) body.max_tokens = profile.params.maxOutputTokens;
@@ -308,7 +321,12 @@ export function createOpenAICompatibleProvider(options: OpenAICompatibleOptions)
                     );
                 }
             }
-            yield { type: 'tool-call', callId: call.id || `call_${index}`, name: call.name, input };
+            yield {
+                type: 'tool-call',
+                callId: call.id || `call_${index}`,
+                name: toolNames.get(call.name) ?? call.name,
+                input,
+            };
         }
         yield {
             type: 'finish',
