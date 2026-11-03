@@ -356,6 +356,9 @@ export function createRepositories(conn: Connection, options: RepoOptions = {}) 
             `${runSelect} WHERE owner_id = ? AND session_id = ? AND finished_at IS NULL ORDER BY started_at DESC LIMIT 1`,
         ),
         unfinished: sqlite.prepare<[], RunRow>(`${runSelect} WHERE finished_at IS NULL ORDER BY started_at`),
+        latestForInput: sqlite.prepare<[string, string], RunRow>(
+            `${runSelect} WHERE owner_id = ? AND input_message_id = ? ORDER BY started_at DESC, id DESC LIMIT 1`,
+        ),
     };
 
     const runs = {
@@ -387,6 +390,11 @@ export function createRepositories(conn: Connection, options: RepoOptions = {}) 
         },
         listActive(ownerId: string): Run[] {
             return runQ.active.all(ownerId).map(toRun);
+        },
+        /** 以某条用户消息为输入的最近一次运行(幂等提交时查回已有运行)。 */
+        latestForInput(ownerId: string, inputMessageId: string): Run | null {
+            const row = runQ.latestForInput.get(ownerId, inputMessageId);
+            return row ? toRun(row) : null;
         },
         activeInSession(ownerId: string, sessionId: string): Run | null {
             const row = runQ.activeInSession.get(ownerId, sessionId);

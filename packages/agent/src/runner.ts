@@ -69,7 +69,7 @@ export class RunManager {
 
     private emit(ownerId: string, sessionId: string, runId: string, event: AgentEvent): void {
         const envelope = this.options.repos.events.append(ownerId, { sessionId, runId, event });
-        this.options.bus.publish(ownerId, envelope);
+        this.options.bus.publish(ownerId, envelope, runId);
     }
 
     /** 在一个事务中创建用户消息、运行与空的助手消息,然后在后台执行。 */
@@ -126,6 +126,14 @@ export class RunManager {
         if (!entry) return false;
         entry.controller.abort();
         return true;
+    }
+
+    /** 中断并等待运行完全结束(删除会话前调用,避免运行继续写已删除的行)。 */
+    async stop(runId: string): Promise<void> {
+        const entry = this.active.get(runId);
+        if (!entry) return;
+        entry.controller.abort();
+        await entry.done;
     }
 
     isActive(runId: string): boolean {
