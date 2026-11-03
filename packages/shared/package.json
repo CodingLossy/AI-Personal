@@ -2,9 +2,18 @@
   "name": "@ai-personal/shared",
   "version": "0.0.0",
   "private": true,
-  "description": "共享 schema、类型与事件协议",
+  "description": "Shared schemas, types and event protocol for AI-Personal",
   "license": "Apache-2.0",
   "author": "尹绪柏 (Theodore Yin) <x19169738916@163.com>",
+  "homepage": "https://github.com/CodingLossy/AI-Personal/tree/main/packages/shared",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CodingLossy/AI-Personal.git",
+    "directory": "packages/shared"
+  },
+  "bugs": {
+    "url": "https://github.com/CodingLossy/AI-Personal/issues"
+  },
   "type": "module",
   "exports": {
     ".": {

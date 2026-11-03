@@ -9,6 +9,9 @@ export const PROTOCOL_VERSION = 1;
 /** 社区版许可证(SPDX 标识)。 */
 export const SERVER_LICENSE = 'AGPL-3.0-only';
 
+/** 官方源码仓库地址;修改版部署者应通过 AIP_SOURCE_URL 改为自己的源码地址(AGPL §13)。 */
+export const OFFICIAL_SOURCE_URL = 'https://github.com/CodingLossy/AI-Personal';
+
 /** `GET /healthz` 响应。 */
 export const HealthResponseSchema = z.object({
     status: z.literal('ok'),

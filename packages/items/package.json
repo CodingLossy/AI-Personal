@@ -2,9 +2,18 @@
   "name": "@ai-personal/items",
   "version": "0.0.0",
   "private": true,
-  "description": "统一条目索引(知识地图数据层)",
+  "description": "Unified item index (knowledge map data layer)",
   "license": "AGPL-3.0-only",
   "author": "尹绪柏 (Theodore Yin) <x19169738916@163.com>",
+  "homepage": "https://github.com/CodingLossy/AI-Personal/tree/main/packages/items",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CodingLossy/AI-Personal.git",
+    "directory": "packages/items"
+  },
+  "bugs": {
+    "url": "https://github.com/CodingLossy/AI-Personal/issues"
+  },
   "type": "module",
   "exports": {
     ".": {

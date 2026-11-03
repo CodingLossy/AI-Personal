@@ -2,9 +2,17 @@
   "name": "ai-personal",
   "version": "0.0.0",
   "private": true,
-  "description": "可自托管的开源个人 AI 助手框架 / A self-hostable, open-source personal AI assistant framework",
+  "description": "A self-hostable, open-source personal AI assistant framework",
   "license": "AGPL-3.0-only",
   "author": "尹绪柏 (Theodore Yin) <x19169738916@163.com>",
+  "homepage": "https://github.com/CodingLossy/AI-Personal",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CodingLossy/AI-Personal.git"
+  },
+  "bugs": {
+    "url": "https://github.com/CodingLossy/AI-Personal/issues"
+  },
   "type": "module",
   "packageManager": "pnpm@10.11.1",
   "engines": {

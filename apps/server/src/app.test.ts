@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { createApp } from './app.js';
 
 describe('server app', () => {
-    const app = createApp({ sourceUrl: null, webDir: null });
+    const app = createApp({ sourceUrl: 'https://github.com/CodingLossy/AI-Personal', webDir: null });
 
     it('GET /healthz 返回 200', async () => {
         const res = await app.request('/healthz');
@@ -35,7 +35,7 @@ describe('server app', () => {
     it('配置 webDir 时托管 Web UI,/api 下未知路径仍为 404', async () => {
         const dir = mkdtempSync(join(tmpdir(), 'aip-web-'));
         writeFileSync(join(dir, 'index.html'), '<!doctype html><title>AI-Personal</title>');
-        const web = createApp({ sourceUrl: null, webDir: dir });
+        const web = createApp({ sourceUrl: 'https://github.com/CodingLossy/AI-Personal', webDir: dir });
 
         const page = await web.request('/some/route');
         expect(page.status).toBe(200);

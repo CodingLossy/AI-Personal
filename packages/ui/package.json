@@ -2,9 +2,18 @@
   "name": "@ai-personal/ui",
   "version": "0.0.0",
   "private": true,
-  "description": "共享 UI 组件",
+  "description": "Shared UI components",
   "license": "AGPL-3.0-only",
   "author": "尹绪柏 (Theodore Yin) <x19169738916@163.com>",
+  "homepage": "https://github.com/CodingLossy/AI-Personal/tree/main/packages/ui",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CodingLossy/AI-Personal.git",
+    "directory": "packages/ui"
+  },
+  "bugs": {
+    "url": "https://github.com/CodingLossy/AI-Personal/issues"
+  },
   "type": "module",
   "exports": {
     ".": {
