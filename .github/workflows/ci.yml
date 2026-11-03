@@ -1,0 +1,80 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 尹绪柏 (Theodore Yin)
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: lint / typecheck / test / build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+  compliance:
+    name: 许可证合规 / license compliance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: SPDX 头与 package.json license/author
+        run: pnpm check:spdx
+      - name: 占位符残留
+        run: pnpm check:placeholders
+      - name: 依赖许可证白名单与遥测黑名单
+        run: pnpm check:licenses
+      - name: REUSE 规范
+        uses: fsfe/reuse-action@v5
+
+  docker:
+    name: Docker 镜像 / image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 构建镜像
+        run: >
+          docker build -f docker/Dockerfile -t ai-personal:ci
+          --build-arg SOURCE_URL=${{ github.server_url }}/${{ github.repository }}
+          .
+      - name: 启动并检查 /healthz 与空闲内存
+        run: |
+          docker run -d --name aip -p 127.0.0.1:8787:8787 ai-personal:ci
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8787/healthz && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8787/healthz
+          curl -fsS http://127.0.0.1:8787/api/v1/meta
+          test "$(docker inspect -f '{{.Config.User}}' aip)" = "node"
+          sleep 10
+          RSS_KB=$(docker exec aip sh -c 'grep VmRSS /proc/1/status' | awk '{print $2}')
+          echo "空闲 RSS: $((RSS_KB / 1024)) MiB"
+          test "$RSS_KB" -lt $((120 * 1024))
+      - name: 停止容器
+        if: always()
+        run: docker rm -f aip || true
