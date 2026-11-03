@@ -32,7 +32,7 @@ jobs:
       - run: pnpm build
 
   compliance:
-    name: 许可证合规 / license compliance
+    name: license compliance
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -42,26 +42,26 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: SPDX 头与 package.json license/author
+      - name: SPDX headers and package.json license/author
         run: pnpm check:spdx
-      - name: 占位符残留
+      - name: Leftover placeholders
         run: pnpm check:placeholders
-      - name: 依赖许可证白名单与遥测黑名单
+      - name: Dependency license allowlist and telemetry denylist
         run: pnpm check:licenses
-      - name: REUSE 规范
+      - name: REUSE compliance
         uses: fsfe/reuse-action@v5
 
   docker:
-    name: Docker 镜像 / image
+    name: docker image
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: 构建镜像
+      - name: Build image
         run: >
           docker build -f docker/Dockerfile -t ai-personal:ci
           --build-arg SOURCE_URL=${{ github.server_url }}/${{ github.repository }}
           .
-      - name: 启动并检查 /healthz 与空闲内存
+      - name: Run and check /healthz, user and idle memory
         run: |
           docker run -d --name aip -p 127.0.0.1:8787:8787 ai-personal:ci
           for i in $(seq 1 30); do
@@ -73,8 +73,8 @@ jobs:
           test "$(docker inspect -f '{{.Config.User}}' aip)" = "node"
           sleep 10
           RSS_KB=$(docker exec aip sh -c 'grep VmRSS /proc/1/status' | awk '{print $2}')
-          echo "空闲 RSS: $((RSS_KB / 1024)) MiB"
+          echo "Idle RSS: $((RSS_KB / 1024)) MiB"
           test "$RSS_KB" -lt $((120 * 1024))
-      - name: 停止容器
+      - name: Remove container
         if: always()
         run: docker rm -f aip || true

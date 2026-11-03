@@ -1,7 +1,7 @@
 # M0 自检报告
 
 - 日期:2026-11-03(第二版:已按业主答复修订)
-- 分支:`main`(本地仓库,尚未推送;共 17 个提交,提交说明均为英文)
+- 分支:`main`(本地仓库,尚未推送;共 18 个提交,提交说明均为英文)
 - 环境:Windows 11,Node 24.15.0,pnpm 10.11.1;**本机未安装 Docker**
 
 ## 一、M0 验收标准(计划第 8 节)
@@ -62,7 +62,7 @@ M0 范围内的其他内容:
 | --- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | owner 为 CodingLossy,源码地址 https://github.com/CodingLossy/AI-Personal | `shared` 新增 `OFFICIAL_SOURCE_URL`,server 未设置 `AIP_SOURCE_URL` 时默认用它,`/api/v1/meta` 与页脚显示该链接;15 个 package.json 补上 `repository` / `bugs` / `homepage`;README、COMMERCIAL、CLA、SECURITY、TRADEMARKS、文件头模板更新链接                                                                                                                                                                                         |
 | 2   | rule.json 只保留通用格式规则;对外内容用英文;允许外键                     | 保留 LF、4 空格、120 列;日志从公司格式改为 JSON 行(pino 风格);分支改名为 `main`,约定改为 `feat/<topic>`;CONTRIBUTING 改为英文,COMMERCIAL 增加英文正文,package.json 描述改为英文;之前 12 条中文提交说明改写为英文(内容不变,留有备份 tag `backup/pre-english-messages`);ADR 0003 恢复 `REFERENCES items(id) ON DELETE CASCADE`,ADR 0001 / AGENTS.md 规定每个 SQLite 连接执行 `PRAGMA foreign_keys = ON`(M1 实现存储层时落地并加测试) |
-| 3   | 提交身份保持个人邮箱                                                     | 全部 17 个提交作者均为 `尹绪柏 (Theodore Yin) <x19169738916@163.com>`                                                                                                                                                                                                                                                                                                                                                              |
+| 3   | 提交身份保持个人邮箱                                                     | 全部 18 个提交作者均为 `尹绪柏 (Theodore Yin) <x19169738916@163.com>`                                                                                                                                                                                                                                                                                                                                                              |
 | 4   | TS 保持 6.0.3                                                            | 不变                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | 5   | CLA 以英文版为准                                                         | 英文正文移到前面并标为 governing,中文改为「仅供参考」的译本,版本号升为 1.1                                                                                                                                                                                                                                                                                                                                                         |
 | 6   | 原始计划文件保持 gitignore                                               | 不变                                                                                                                                                                                                                                                                                                                                                                                                                               |
@@ -85,7 +85,7 @@ M0 范围内的其他内容:
    git switch main
    ```
 4. 在 Actions 页确认 CI 的 `check`、`compliance`、`docker` 三个任务全绿(docker 任务会验证镜像构建、`/healthz`、非 root、空闲 RSS < 120MB)。如有失败我来修。
-5. Settings → Branches:为 `main` 添加保护规则——要求 PR、要求状态检查通过(`lint / typecheck / test / build`、`许可证合规 / license compliance`、`Docker 镜像 / image`、`cla`),`cla-signatures` 分支不要加保护。
+5. Settings → Branches:为 `main` 添加保护规则——要求 PR、要求状态检查通过(`lint / typecheck / test / build`、`license compliance`、`docker image`、`cla`),`cla-signatures` 分支不要加保护。
 6. Settings → Code security:开启 Private vulnerability reporting(SECURITY.md 已链接)。
 7. 可选:在 Settings → General 中填写 About(描述、主页)与 Topics。
 8. 确认无误后删除本地备份 tag:`git tag -d backup/pre-english-messages`。
