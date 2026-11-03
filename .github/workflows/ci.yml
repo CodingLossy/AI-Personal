@@ -61,7 +61,7 @@ jobs:
           docker build -f docker/Dockerfile -t ai-personal:ci
           --build-arg SOURCE_URL=${{ github.server_url }}/${{ github.repository }}
           .
-      - name: Run and check /healthz, user and idle memory
+      - name: Run and check /healthz, auth, data dir, user and idle memory
         run: |
           docker run -d --name aip -p 127.0.0.1:8787:8787 ai-personal:ci
           for i in $(seq 1 30); do
@@ -70,6 +70,10 @@ jobs:
           done
           curl -fsS http://127.0.0.1:8787/healthz
           curl -fsS http://127.0.0.1:8787/api/v1/meta
+          curl -fsS http://127.0.0.1:8787/api/v1/auth/status | grep -q '"initialized":false'
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8787/api/v1/auth/me)" = "401"
+          docker exec aip test -f /data/db.sqlite
+          docker logs aip 2>&1 | grep -q 'one-time setup code'
           test "$(docker inspect -f '{{.Config.User}}' aip)" = "node"
           sleep 10
           RSS_KB=$(docker exec aip sh -c 'grep VmRSS /proc/1/status' | awk '{print $2}')
