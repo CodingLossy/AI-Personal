@@ -1,0 +1,21 @@
+{
+  "name": "@ai-personal/channels",
+  "version": "0.0.0",
+  "private": true,
+  "description": "渠道适配器(1.0:企业微信、微信)",
+  "license": "AGPL-3.0-only",
+  "author": "尹绪柏 (Theodore Yin) <x19169738916@163.com>",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  }
+}
