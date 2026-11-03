@@ -135,7 +135,7 @@
 | 包管理/单仓 | pnpm workspaces + Turborepo | |
 | 语言/校验 | TypeScript strict + zod | 共享 schema |
 | HTTP/WS 服务 | Hono(@hono/node-server)| 轻量;SSE 流式 + WebSocket |
-| LLM 层 | Vercel AI SDK 7(`ai` + `@ai-sdk/openai-compatible` / `@ai-sdk/anthropic` / `@ai-sdk/google`)| 自封一层 `ModelProvider` 接口,避免强绑定 |
+| LLM 层 | 自有 `ModelProvider` 接口;OpenAI 兼容端点用 fetch + SSE 自写(AI SDK 7 加载即增加约 22 MiB RSS,见 ADR 0006);Anthropic / Gemini 原生适配届时评估,若用 SDK 则按需动态加载 | 避免强绑定,守住 2GB 内存预算 |
 | MCP | `@modelcontextprotocol/sdk`(客户端 + 自身也暴露 MCP Server)| stdio + Streamable HTTP |
 | 存储 | SQLite(better-sqlite3,手写参数化 SQL + 自写迁移器)+ sqlite-vec(向量)| 单文件,备份简单;不用 ORM:drizzle-orm 0.45 仅加载就占约 140MB 堆(ADR 0005);Node 内置 `node:sqlite` 转稳定后可替换 |
 | 任务调度 | 自研轻量调度器(cron 表达式用 `croner`)+ SQLite 持久化 | |
