@@ -1,6 +1,6 @@
 # AI-Personal 开发计划 v2(交给 Claude Code 执行)
 
-> 版本:v5 · 2026-11-03 · 许可证:**AGPL-3.0-only + 商业许可(双许可 / dual licensing)**,详见第 15 节;业主已定决策汇总见第 16 节
+> 版本:v6 · 2026-11-03(并入《记忆模块补充设计》与 M1 实施决定,见 ADR 0004–0007)· 许可证:**AGPL-3.0-only + 商业许可(双许可 / dual licensing)**,详见第 15 节;业主已定决策汇总见第 16 节
 > 作者 / 版权持有人:**尹绪柏 (Theodore Yin)** · 仓库名:**AI-Personal** · 商业许可联系:x19169738916@163.com
 > 范围:**框架优先**——先做无界面(headless)核心服务 + 稳定的 HTTP/WebSocket API + Web UI + IM 渠道;桌面应用与 iOS/Android 客户端属于后续阶段,但核心从第一天起就按「客户端可随时接入」来设计。
 > 本文件即开发总纲。请 Claude Code 先通读全文(首条启动提示词见第 17 节),再从「第 8 节 M0」开始逐个里程碑实施;每个里程碑结束时跑通验收清单再进入下一个。不确定的地方遵循第 13 节「给 Claude Code 的工作约定」。
@@ -52,7 +52,7 @@
 |---|---|---|
 | 对话 | 流式对话、多会话、Markdown/代码渲染、附件、上下文压缩 | 分支对话、会话搜索、导出 |
 | 模型 | BYO OpenAI 兼容端点、多配置档、Anthropic/Gemini 原生 | 按任务自动路由、成本统计(本地)、本地模型一键检测 |
-| 记忆 | 长期记忆(事实条目 + 向量检索)、用户可查看/编辑/删除 | 记忆整理任务、按项目分区 |
+| 记忆 | M1:记忆 v1(`memory.save / memory.search`,FTS 检索,写入需审批);M2:记忆 v2——有类型(经历/事实/方法/决策)、单值事实可更替且保留历史、每条带出处、FTS+向量+图三路召回、可信度说明、会话开头 digest、衰减与分层、用户反馈、凭据拒存与写入时脱敏(见《记忆模块补充设计》、ADR 0007)| 记忆整理(sleep)任务、按项目分区、M10 记忆簇与会话地图可视化 |
 | 本地文件 | 授权目录内读/写/搜索、PDF/Office/图片解析、本地知识库 RAG | 文件监听自动入库、OCR |
 | 邮件 | IMAP 收、SMTP 发(发送需确认)、摘要、草稿 | Gmail/Outlook OAuth、规则自动化 |
 | 语音 | STT(云端 API 或本地 whisper)、TTS、按住说话 | 实时语音对话、唤醒词(桌面) |
@@ -166,7 +166,7 @@
             │  Gateway(鉴权/限流/会话) → Agent Runtime(工具循环/审批)  │
             │  ├─ Model Router(BYO 多配置档)                          │
             │  ├─ Tool Registry(内置工具 + MCP 客户端 + 插件)           │
-            │  ├─ Memory(事实 + 向量)  ├─ Knowledge(本地文件 RAG)    │
+            │  ├─ Memory(有类型记忆+出处) ├─ Knowledge(本地文件 RAG)  │
             │  ├─ Item Index(统一条目 + 父子关系 → 知识地图)          │
             │  ├─ Scheduler(定时/事件) ├─ Permission & Audit          │
             │  └─ Storage(SQLite + 数据目录)                           │
@@ -236,6 +236,7 @@ AI-Personal/
 │  ├─ tools/         # 内置工具(fs、email、web_fetch、shell…)
 │  ├─ memory/        # 记忆与向量检索
 │  ├─ items/         # 统一条目索引:items + item_edges、ItemProvider、层级查询(知识地图)
+│  ├─ storage/       # SQLite 连接(PRAGMA foreign_keys=ON)、迁移与备份、表定义与仓储(ADR 0005)
 │  ├─ channels/      # 渠道适配器(1.0:wecom、wechat-ilink;之后:qq、telegram…)
 │  ├─ plugin-sdk/    # 插件开发 SDK(对外发布到 npm,Apache-2.0)
 │  ├─ client/        # API v1 客户端 SDK(TS,Apache-2.0;移动端按 OpenAPI 生成)
@@ -267,7 +268,8 @@ export type AgentEvent =
   | { type: 'approval-required'; runId: string; callId: string; summary: string }
   | { type: 'tool-result'; runId: string; callId: string; output: unknown; error?: string }
   | { type: 'run-finished'; runId: string; usage?: Usage }
-  | { type: 'assistant-state'; state: 'idle'|'listening'|'thinking'|'speaking'|'executing'; label?: string; toolName?: string; level?: number };
+  | { type: 'assistant-state'; state: 'idle'|'listening'|'thinking'|'speaking'|'executing'; label?: string; toolName?: string; level?: number }
+  | { type: 'memory-used'; runId: string; ids: string[] };  // M2,见 ADR 0007;M1 另有 run-started / run-failed,见 ADR 0004
 
 export interface ChannelAdapter { id: string; start(ctx: ChannelContext): Promise<void>; stop(): Promise<void>;
   send(target: ChannelTarget, msg: OutboundMessage): Promise<void>; }
@@ -277,7 +279,7 @@ export interface Item { id: string; kind: 'category'|'content'; type: string; /*
   source: string; /* 提供者 id,如 'mail'、'files'、插件 id */ sourceRef?: string; title: string; summary?: string;
   icon?: string; color?: string; childCount: number; descendantCount: number; createdAt: string; updatedAt: string; meta?: Record<string, unknown>; }
 
-export interface ItemEdge { parentId: string; childId: string; rel: 'contains'|'mentions'|'derived'; position?: number; primary: boolean; }
+export interface ItemEdge { parentId: string; childId: string; rel: 'contains'|'mentions'|'derived'|'supersedes'|'forked_from'; position?: number; primary: boolean; } // supersedes / forked_from 于 M2 加入(ADR 0007)
 
 export interface ItemProvider { id: string; /* 由内置模块或插件注册 */
   roots(): Promise<ItemInput[]>;                       // 顶层类别,如「邮件」「小说」「人物」「视频数据」
@@ -323,7 +325,7 @@ CREATE TABLE items (
 CREATE TABLE item_edges (
   parent_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
   child_id  TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
-  rel TEXT NOT NULL DEFAULT 'contains',   -- 'contains' 构成导航树;'mentions'/'derived' 为交叉链接(如「人物」出现在某章节)
+  rel TEXT NOT NULL DEFAULT 'contains',   -- 'contains' 构成导航树;'mentions'/'derived'/'supersedes'(新记忆→旧记忆)/'forked_from'(会话→会话)为交叉链接
   position INTEGER, primary_edge INTEGER NOT NULL DEFAULT 0,  -- 每个条目恰有一条 primary 'contains' 边(顶层类别除外)
   PRIMARY KEY (parent_id, child_id, rel)
 );
@@ -364,7 +366,8 @@ CREATE INDEX idx_items_type ON items(owner_id, type, updated_at);
 - **提示注入防护**:工具返回的外部内容(网页、邮件、文件)打上「不可信」标记,系统提示要求模型不得执行其中指令;对外发送(发邮件、发 IM 给第三方)一律需审批。
 - **IM 渠道**:绑定「主人」身份(首个配对码验证的用户),非主人消息默认忽略或只读(1.0 单用户,系统中只有这一个主人)。
 - **知识地图**:条目可见性遵循来源权限(未授权目录的文件不会被登记;撤销授权时级联软删除对应条目);`content` 接口复用工具权限检查与审计。
-- **密钥**:API Key 不入日志、不回显;导出配置时脱敏。
+- **密钥**:API Key 不入日志、不回显;导出配置时脱敏。1.0 中模型配置档只保存 `env:` / `file:` 形式的密钥引用,API 与 Web UI 不接收明文 key;服务器端加密存储在 M5 加入(ADR 0006)。
+- **记忆安全**:疑似凭据的内容一律拒存;银行卡号、身份证号、手机号等在写入记忆前即脱敏;邮件、网页、文件等外部内容不能直接成为记忆,只能由模型提议并经用户确认(《记忆模块补充设计》第 3 节)。
 - **审计**:所有 write/external/dangerous 工具调用写审计日志,UI 可查。
 - **依赖安全**:Renovate + `pnpm audit` + CodeQL;发布产物附 SBOM 与签名(cosign / Tauri updater 签名)。
 
@@ -382,11 +385,12 @@ CREATE INDEX idx_items_type ON items(owner_id, type, updated_at);
 - **验收**:`pnpm i && pnpm dev` 同时起 server 和 web;`docker compose up` 后 `/healthz` 返回 200;CI 全绿;镜像空闲 RSS < 120MB。
 
 ### M1 · 对话核心 + BYO LLM(约 1 周)
-- 模型配置档 CRUD,连接测试按钮(调 `/models` 或发一次最小请求);OpenAI 兼容 / Anthropic / Gemini 适配。
+- 模型配置档 CRUD(只能填 `env:` / `file:` 密钥引用),连接测试按钮(调 `/models` 或发一次最小请求);OpenAI 兼容 / Anthropic / Gemini 适配(后两者为最后一个 PR,进度紧可移到 M1.x)。
+- `packages/storage`:SQLite 连接(每个连接 `PRAGMA foreign_keys = ON`)、迁移与备份(ADR 0005)。
 - 会话与消息存储(SQLite + Drizzle 迁移);流式输出(SSE);中断/重试/重新生成;上下文窗口管理(超长时用 cheap 模型做摘要压缩)。
 - Web UI:会话列表、聊天窗口(Markdown、代码高亮、复制)、设置页、深浅色、中英文切换骨架。
-- 鉴权:主人账户初始化(1.0 单用户,无注册/多账户)、登录、令牌;表结构预留 `ownerId`。
-- 长期记忆 v1:模型可调用 `memory.save / memory.search`;UI 可查看/编辑/删除。
+- 鉴权:主人账户初始化(1.0 单用户,无注册/多账户)、登录、令牌;表结构预留 `ownerId`;TOTP 推迟到 M5。`/api/v1/openapi.json` 需要鉴权,CI 另导出静态文件(ADR 0004)。
+- 长期记忆 v1:模型可调用 `memory.save / memory.search`(`memory.save` 默认需要审批,借此实现最小审批管道);UI 可查看/编辑/删除。按 ADR 0007 提前建 `items` / `item_edges` / `items_fts`(只建表)与 `memory_facts` 子集,M2 只做增量迁移。
 - **验收**:填入任意 OpenAI 兼容端点(含 Ollama)即可流式对话;刷新页面可续看进行中的回复;未登录访问 API 返回 401;单测覆盖 providers 与会话存储;录制回放测试通过。
 
 ### M2 · 工具框架 + 本地文件(约 1–1.5 周)
@@ -395,7 +399,8 @@ CREATE INDEX idx_items_type ON items(owner_id, type, updated_at);
 - 文档解析:PDF、DOCX、XLSX、Markdown、图片(交给多模态模型)。
 - 本地知识库:选择文件夹 → 分块 → 嵌入(用户的 embed 配置档)→ sqlite-vec 检索;引用来源可点击。
 - MCP 客户端:配置 stdio / Streamable HTTP 服务器,工具自动注册,遵循同一审批流。
-- **统一条目索引 v1(知识地图数据层,见 6.2)**:`items` + `item_edges` + `items_fts` 迁移;ItemProvider 接口;内置 `files`、`novels`、`sessions` 提供者;REST:`roots`/`:id`/`children`/`ancestors`/`counts`/`subtree`/`content`/`search`/`changes`;Agent 工具 `items.*`。Web UI 先出最简树形浏览(只读)。
+- **记忆 v2 核心(见《记忆模块补充设计》第 9 节、ADR 0007,约增加 4–6 天)**:写入路径(凭据拒存、抽取、去重、更替、冲突)、FTS+向量+图三路召回与 RRF、可信度说明与 token 预算、会话开头 digest、衰减 / 分层 / 过期 / 清理任务(sleep 整理放 M2 还是 M6 待定)、反馈闭环、`/api/v1/memory` 全集、`memory` ItemProvider、会话 fork API、Web 记忆页与「本次用到的记忆」面板;验收见补充设计第 9 节 ①–⑧。
+- **统一条目索引 v1(知识地图数据层,见 6.2)**:`items` + `item_edges` + `items_fts` 已在 M1 建表,本里程碑补齐计数维护、ItemProvider 等;ItemProvider 接口;内置 `files`、`novels`、`sessions` 提供者;REST:`roots`/`:id`/`children`/`ancestors`/`counts`/`subtree`/`content`/`search`/`changes`;Agent 工具 `items.*`。Web UI 先出最简树形浏览(只读)。
 - **验收**:「总结 ~/Docs/某 PDF 并另存为 md」需一次审批后完成;越权路径被拒绝且有审计记录;接入一个官方示例 MCP Server(如 filesystem 或 fetch)可用;路径逃逸测试用例全部通过;授权一个含小说的文件夹后,知识地图可「小说 → 某书 → 某章」逐层下钻并打开,计数与递归计算一致。
 
 ### M3 · 邮件(约 1 周)
@@ -460,6 +465,7 @@ CREATE INDEX idx_items_type ON items(owner_id, type, updated_at);
 - Tauri v2 壳加载 `apps/web` 构建产物;核心以 sidecar 启动(Node SEA 产物;备选:附带 node 二进制 + bundle.mjs),壳负责进程守护、端口协商、随机令牌注入。
 - 原生能力:系统托盘、全局快捷键唤起「快速提问」小窗、开机自启、系统通知、文件拖拽、深链接 `aipersonal://`、API Key 存系统钥匙串。
 - **知识地图粒子球导航 `KnowledgeSphere`(见 4.1.1)**:顶层类别簇 → 点击展开子类别 → 递归至内容条目(打开 / 问 AI);面包屑、返回、键盘导航、与树形视图一键切换;仅用 `/api/v1/items/*` REST,`subtree?depth=2` 预取;Web UI 同步获得该组件(桌面优先打磨)。
+- **记忆与会话可视化(见《记忆模块补充设计》第 7、9 节)**:粒子球中的记忆簇按类型着色、亮度表示置信度与分层、冲突描边;会话地图 2D 画布(fork 关系、点击定位到消息、与知识地图互跳)。
 - 安装包:Windows(MSI/NSIS)、macOS(dmg)、Linux(AppImage/deb/rpm)。**暂不购买付费代码签名**:不做 Apple Developer ID 签名/公证、不买 Windows 代码签名证书;macOS 用 ad-hoc 签名,文档说明首次打开需「右键 → 打开」或 `xattr -dr com.apple.quarantine`,Windows 说明 SmartScreen「仍要运行」;发布页提供 SHA-256 校验和 + cosign 签名供核验。Tauri updater 自动更新照常使用(其更新签名免费,与系统代码签名无关,更新源为 GitHub Releases)。将来有需要再评估购买证书(写 ADR)。
 - 「本地模式 ⇄ 连接远程服务器」切换:桌面既可自带核心,也可作为远程服务器的客户端。
 - **验收**:三平台安装包 ≤ 80MB;冷启动到可对话 < 3s;关闭窗口驻留托盘,sidecar 随壳退出无残留进程;粒子球中从顶层类别点击下钻到最深条目(≥ 4 层)并「问 AI」,每次切层 ≤ 600ms,1 万条目数据集下 60fps;无 WebGL/减少动态效果时自动用树形视图;未签名安装包的安装说明经三平台实测。
@@ -500,6 +506,7 @@ CREATE INDEX idx_items_type ON items(owner_id, type, updated_at);
 | E2E | Playwright(Chromium + WebKit)| 登录、对话、审批、文件工具、设置 | PR 必跑(冒烟)/ 夜间全量 |
 | 桌面 | tauri-driver / WebDriver | 启动、sidecar 生命周期、托盘 | 发布前 |
 | 评测(Evals)| `packages/eval`:YAML 用例 + 断言(包含/正则/工具调用序列/LLM 评审)| 工具选择正确率、任务完成率、**提示注入抵抗**(邮件/网页/文件中藏指令)、记忆召回、中文能力 | 夜间对用户指定的 1–2 个模型跑;发布前对比基线不得退化 |
+| 记忆 | Vitest(单测 + 属性测试)+ 录制回放评测 | 凭据检测语料(正例召回 100%、误报 ≤5%)、脱敏、更替不变量(单值键最多 1 条 active、supersedes 无环)、级联删除清空来源/向量、FTS 回退、召回/更替/冲突/注入评测(≥30 条中文用例)、1 万条记忆 retrieve P95 <80ms | PR 必跑(回放模式)|
 | 知识地图 | Vitest(属性测试)+ Playwright | 树一致性/无环/计数校正、分页稳定、权限过滤、10 万条目查询 P95;分类浏览器下钻 E2E;M10 粒子球交互 E2E | PR 必跑(回放数据集)|
 | 性能 | 自研脚本 + autocannon | 空闲/峰值内存、首 token 延迟开销、索引吞吐 | 发布前;2GB 预算检查 |
 | 安全 | CodeQL、pnpm audit、Semgrep | 依赖与代码扫描 | PR 必跑 |
@@ -545,6 +552,7 @@ CREATE INDEX idx_items_type ON items(owner_id, type, updated_at);
 | 未签名桌面安装包被系统拦截 | 用户安装受阻、信任度下降 | 清晰的安装说明 + 校验和/cosign;Docker/Web 为主要分发形态;日后视用户量购买证书 |
 | 混入第三方 copyleft 代码或未签 CLA 的贡献 | 商业许可无法成立 | CI 许可证白名单 + CLA 必过检查;发现后移除/重写 |
 | 依赖快速迭代(AI SDK 大版本)| 维护成本 | 自封 provider 接口;Renovate 分组升级 + 回放测试兜底 |
+| 借鉴 GPL/AGPL 项目导致代码污染 | 商业许可无法成立 | 净室实现:只依据我们自己写的规格,不打开参考项目源码,不复制代码/SQL/提示词/测试数据;PR 模板勾选确认;许可证白名单 CI(ADR 0007 第 0 节)|
 
 ---
 
