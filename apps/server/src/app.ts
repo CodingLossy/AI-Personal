@@ -5,6 +5,7 @@ import { getConnInfo } from '@hono/node-server/conninfo';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { type HealthResponse, MetaResponseSchema, PROTOCOL_VERSION, SERVER_LICENSE } from '@ai-personal/shared';
+import type { EventBus, RunManager } from '@ai-personal/agent';
 import type { ProviderDeps, SecretStore } from '@ai-personal/providers';
 import { newId, type Repositories } from '@ai-personal/storage';
 import type { Context } from 'hono';
@@ -19,6 +20,8 @@ import type { Logger } from './log.js';
 import { authRoutes } from './routes/auth.js';
 import { json } from './routes/common.js';
 import { modelRoutes } from './routes/models.js';
+import { runRoutes } from './routes/runs.js';
+import { sessionRoutes } from './routes/sessions.js';
 import { tokenRoutes } from './routes/tokens.js';
 import { SERVER_VERSION } from './version.js';
 
@@ -30,6 +33,9 @@ export interface AppDeps {
     secrets: SecretStore;
     /** 创建模型 provider 所需的依赖;测试中可注入 fetch。 */
     providerDeps: ProviderDeps;
+    /** 事件总线与运行管理(ADR 0004 第 5 节)。 */
+    bus: EventBus;
+    runs: RunManager;
     now?: () => Date;
     /** 请求来源地址;默认取 TCP 对端地址(不信任 X-Forwarded-For)。 */
     clientIp?: (c: Context<AppEnv>) => string;
@@ -60,6 +66,7 @@ export function createApp(deps: AppDeps): OpenAPIHono<AppEnv> {
     const now = deps.now ?? (() => new Date());
     const clientIp = deps.clientIp ?? tcpPeer;
     const app = new OpenAPIHono<AppEnv>();
+    const runDeps = { repos, bus: deps.bus, runs: deps.runs, secrets: deps.secrets };
 
     app.onError(handleError);
 
@@ -107,7 +114,7 @@ export function createApp(deps: AppDeps): OpenAPIHono<AppEnv> {
                     protocolVersion: PROTOCOL_VERSION,
                     license: SERVER_LICENSE,
                     sourceUrl: config.sourceUrl,
-                    capabilities: [],
+                    capabilities: ['chat'],
                 },
                 200,
             ),
@@ -124,7 +131,9 @@ export function createApp(deps: AppDeps): OpenAPIHono<AppEnv> {
             }),
         )
         .route('/', tokenRoutes({ repos, now }))
-        .route('/', modelRoutes({ repos, secrets: deps.secrets, providerDeps: deps.providerDeps }));
+        .route('/', modelRoutes({ repos, secrets: deps.secrets, providerDeps: deps.providerDeps }))
+        .route('/', sessionRoutes(runDeps))
+        .route('/', runRoutes(runDeps));
     app.route('/api/v1', v1);
 
     // OpenAPI 文档同样需要鉴权(业主决定;CI 另导出静态文件)
