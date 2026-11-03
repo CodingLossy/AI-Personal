@@ -28,7 +28,8 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "record:fixtures": "node scripts/record-fixtures.mjs"
   },
   "dependencies": {
     "@ai-personal/shared": "workspace:*"

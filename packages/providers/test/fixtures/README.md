@@ -1,6 +1,9 @@
 # Provider fixtures
 
-Recorded HTTP interactions replayed by the provider tests. Files with `"synthetic": true` were written by hand from the OpenAI-compatible streaming format and have not yet been recorded against a real endpoint.
+Recorded HTTP interactions replayed by the provider tests.
+
+- `deepseek-*.json`: recorded against the DeepSeek API (`https://api.deepseek.com/v1`, model `deepseek-chat`) on 2026-11-03 with `scripts/record-fixtures.mjs`. The auth-error fixture uses a deliberately invalid key.
+- Files with `"synthetic": true` were written by hand from the OpenAI-compatible streaming format; they cover cases a single provider does not produce (Ollama-style CRLF and split events, no usage).
 
 To re-record against a real endpoint (keys are read from the environment and redacted before anything is written):
 
