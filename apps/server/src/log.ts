@@ -29,7 +29,14 @@ export const REDACT_PATHS = [
 ];
 
 /** JSON 行日志(time / level / msg + 字段),只写本地,永不外传。 */
-export function createLogger(options: { level?: LogLevel; destination?: DestinationStream } = {}): Logger {
+export function createLogger(
+    options: {
+        level?: LogLevel;
+        destination?: DestinationStream;
+        /** 按值脱敏(例如本进程已加载的模型密钥);在每行写出前调用。 */
+        redactLine?: (line: string) => string;
+    } = {},
+): Logger {
     return pino(
         {
             level: options.level ?? 'info',
@@ -37,6 +44,7 @@ export function createLogger(options: { level?: LogLevel; destination?: Destinat
             timestamp: pino.stdTimeFunctions.isoTime,
             formatters: { level: (label) => ({ level: label }) },
             redact: { paths: REDACT_PATHS, censor: '[REDACTED]' },
+            ...(options.redactLine ? { hooks: { streamWrite: options.redactLine } } : {}),
         },
         options.destination,
     );

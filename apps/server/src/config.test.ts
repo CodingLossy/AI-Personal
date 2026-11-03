@@ -92,3 +92,19 @@ describe('日志', () => {
         expect(lines[0]).not.toMatch(/p@ss|t0k|Bearer x/);
     });
 });
+
+describe('日志按值脱敏', () => {
+    it('redactLine 在每行写出前执行', () => {
+        const lines: string[] = [];
+        const destination = new Writable({
+            write(chunk: Buffer, _e, cb) {
+                lines.push(chunk.toString());
+                cb();
+            },
+        });
+        const logger = createLogger({ destination, redactLine: (l) => l.split('secret-value-123').join('[REDACTED]') });
+        logger.info({ note: 'the key is secret-value-123' }, 'x');
+        expect(lines[0]).toContain('[REDACTED]');
+        expect(lines[0]).not.toContain('secret-value-123');
+    });
+});
