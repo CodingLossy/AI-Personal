@@ -15,6 +15,7 @@ import type {
 } from '@ai-personal/shared';
 import { z } from 'zod';
 import { createAuthRepositories } from './auth.js';
+import { createProfileRepository } from './profiles.js';
 import { decodeCursor, encodeCursor, type Page } from './cursor.js';
 import type { Connection } from './db.js';
 import { newId } from './ids.js';
@@ -433,7 +434,15 @@ export function createRepositories(conn: Connection, options: RepoOptions = {}) 
         },
     };
 
-    return { owners, sessions, messages, runs, events, ...createAuthRepositories(conn, now) };
+    return {
+        owners,
+        sessions,
+        messages,
+        runs,
+        events,
+        modelProfiles: createProfileRepository(conn, now),
+        ...createAuthRepositories(conn, now),
+    };
 }
 
 export type Repositories = ReturnType<typeof createRepositories>;
