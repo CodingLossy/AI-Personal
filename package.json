@@ -28,7 +28,8 @@
     "format:check": "prettier --check .",
     "check:spdx": "node scripts/check-spdx.mjs",
     "check:licenses": "node scripts/check-licenses.mjs",
-    "check:placeholders": "node scripts/check-placeholders.mjs"
+    "check:placeholders": "node scripts/check-placeholders.mjs",
+    "check:secrets": "node scripts/check-secrets.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

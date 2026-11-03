@@ -10,6 +10,7 @@ export type { AccessTokenRecord, AuthSessionRecord } from './auth.js';
 export { encodeCursor, decodeCursor, InvalidCursorError, type Page } from './cursor.js';
 export { applyPragmas, assertForeignKeysOn, openDatabase, StorageError, type Connection, type Sqlite } from './db.js';
 export { newId } from './ids.js';
+export type { ModelProfileRecord } from './profiles.js';
 export {
     checksum,
     migrate,

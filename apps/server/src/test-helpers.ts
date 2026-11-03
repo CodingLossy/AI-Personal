@@ -6,6 +6,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Writable } from 'node:stream';
+import { Redactor, SecretStore } from '@ai-personal/providers';
 import { createRepositories, openStorage, type Repositories } from '@ai-personal/storage';
 import { createApp, type AppDeps } from './app.js';
 import { FailureLimiter } from './auth/rate-limit.js';
@@ -16,6 +17,7 @@ export const TEST_SETUP_CODE = 'setup-code-123456';
 
 export interface TestServer {
     app: ReturnType<typeof createApp>;
+    dir: string;
     repos: Repositories;
     /** 本测试期间写出的全部日志行。 */
     logs: string[];
@@ -25,7 +27,17 @@ export interface TestServer {
 /**
  * 真实 SQLite 文件 + 完整应用。请求头 x-test-ip 模拟 TCP 对端地址(默认 127.0.0.1)。
  */
-export async function createTestServer(overrides: Partial<AppDeps['config']> = {}): Promise<TestServer> {
+export interface TestServerOptions {
+    /** 模型请求使用的 fetch(回放或桩)。 */
+    fetch?: typeof fetch;
+    /** SecretStore 读取的环境变量。 */
+    env?: NodeJS.ProcessEnv;
+}
+
+export async function createTestServer(
+    overrides: Partial<AppDeps['config']> = {},
+    options: TestServerOptions = {},
+): Promise<TestServer> {
     const dir = mkdtempSync(join(tmpdir(), 'aip-server-'));
     const { conn } = await openStorage({ dataDir: dir });
     const repos = createRepositories(conn);
@@ -36,6 +48,8 @@ export async function createTestServer(overrides: Partial<AppDeps['config']> = {
             cb();
         },
     });
+    const redactor = new Redactor();
+    const secrets = new SecretStore({ dataDir: dir, redactor, env: options.env ?? {} });
     const app = createApp({
         config: {
             sourceUrl: 'https://github.com/CodingLossy/AI-Personal',
@@ -45,12 +59,20 @@ export async function createTestServer(overrides: Partial<AppDeps['config']> = {
             ...overrides,
         },
         repos,
-        logger: createLogger({ level: 'debug', destination }),
+        logger: createLogger({ level: 'debug', destination, redactLine: (l) => redactor.redact(l) }),
+        secrets,
+        providerDeps: {
+            secrets,
+            redactor,
+            sleep: () => Promise.resolve(),
+            ...(options.fetch ? { fetch: options.fetch } : {}),
+        },
         clientIp: (c) => c.req.header('x-test-ip') ?? '127.0.0.1',
         loginLimiter: new FailureLimiter(5, 60_000),
     });
     return {
         app,
+        dir,
         repos,
         logs,
         cleanup() {

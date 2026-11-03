@@ -3,6 +3,7 @@
 
 import { mkdirSync } from 'node:fs';
 import { serve } from '@hono/node-server';
+import { Redactor, SecretStore } from '@ai-personal/providers';
 import { createRepositories, openStorage } from '@ai-personal/storage';
 import { createApp } from './app.js';
 import { randomToken } from './auth/crypto.js';
@@ -10,7 +11,9 @@ import { loadConfig } from './config.js';
 import { createLogger } from './log.js';
 
 const config = loadConfig();
-const logger = createLogger({ level: config.logLevel });
+// 脱敏器登记本进程加载过的模型密钥;日志每一行写出前都经过它(ADR 0006)
+const redactor = new Redactor();
+const logger = createLogger({ level: config.logLevel, redactLine: (line) => redactor.redact(line) });
 
 mkdirSync(config.dataDir, { recursive: true, mode: 0o700 });
 const { conn, migrated } = await openStorage({ dataDir: config.dataDir });
@@ -18,6 +21,7 @@ if (migrated.applied.length > 0) {
     logger.info({ applied: migrated.applied, backup: migrated.backupPath }, 'database migrated');
 }
 const repos = createRepositories(conn);
+const secrets = new SecretStore({ dataDir: config.dataDir, redactor, onWarning: (msg) => logger.warn(msg) });
 
 // 尚未初始化时,生成一次性设置码供非本机完成初始化;本机直连无需设置码(ADR 0004 第 2 节)
 let setupCode = config.setupCode;
@@ -31,7 +35,13 @@ if (repos.owners.count() === 0) {
     }
 }
 
-const app = createApp({ config: { ...config, setupCode }, repos, logger });
+const app = createApp({
+    config: { ...config, setupCode },
+    repos,
+    logger,
+    secrets,
+    providerDeps: { secrets, redactor },
+});
 
 const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
     logger.info({ host: info.address, port: info.port, dataDir: config.dataDir }, 'listening');

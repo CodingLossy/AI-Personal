@@ -5,6 +5,7 @@ import { getConnInfo } from '@hono/node-server/conninfo';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { type HealthResponse, MetaResponseSchema, PROTOCOL_VERSION, SERVER_LICENSE } from '@ai-personal/shared';
+import type { ProviderDeps, SecretStore } from '@ai-personal/providers';
 import { newId, type Repositories } from '@ai-personal/storage';
 import type { Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -17,6 +18,7 @@ import { ApiError, handleError, notFound, problemResponse } from './errors.js';
 import type { Logger } from './log.js';
 import { authRoutes } from './routes/auth.js';
 import { json } from './routes/common.js';
+import { modelRoutes } from './routes/models.js';
 import { tokenRoutes } from './routes/tokens.js';
 import { SERVER_VERSION } from './version.js';
 
@@ -24,6 +26,10 @@ export interface AppDeps {
     config: Pick<ServerConfig, 'sourceUrl' | 'webDir' | 'cookieSecure' | 'setupCode'>;
     repos: Repositories;
     logger: Logger;
+    /** 解析 apiKeyRef(env: / file:)。 */
+    secrets: SecretStore;
+    /** 创建模型 provider 所需的依赖;测试中可注入 fetch。 */
+    providerDeps: ProviderDeps;
     now?: () => Date;
     /** 请求来源地址;默认取 TCP 对端地址(不信任 X-Forwarded-For)。 */
     clientIp?: (c: Context<AppEnv>) => string;
@@ -117,7 +123,8 @@ export function createApp(deps: AppDeps): OpenAPIHono<AppEnv> {
                 ...(deps.loginLimiter ? { loginLimiter: deps.loginLimiter } : {}),
             }),
         )
-        .route('/', tokenRoutes({ repos, now }));
+        .route('/', tokenRoutes({ repos, now }))
+        .route('/', modelRoutes({ repos, secrets: deps.secrets, providerDeps: deps.providerDeps }));
     app.route('/api/v1', v1);
 
     // OpenAPI 文档同样需要鉴权(业主决定;CI 另导出静态文件)

@@ -25,7 +25,8 @@ export const ModelParams = z.object({
     maxOutputTokens: z.number().int().positive().max(1_000_000).optional(),
 });
 
-const ModelProfileFields = z.object({
+/** 未知字段一律拒绝,避免客户端误把明文密钥放进其他字段后被静默丢弃(ADR 0006)。 */
+const ModelProfileFields = z.strictObject({
     label: z.string().min(1).max(60),
     kind: ModelKind,
     baseURL: z.url({ protocol: /^https?$/ }).optional(),
