@@ -12,9 +12,10 @@ ENV PATH=$PNPM_HOME:$PATH
 RUN corepack enable
 WORKDIR /repo
 COPY . .
-RUN pnpm install --frozen-lockfile \
-    && pnpm build \
-    && pnpm --filter @ai-personal/server deploy --prod --legacy /out
+RUN pnpm install --frozen-lockfile && pnpm build
+# 只重新安装 server 及其工作区依赖的生产依赖(pnpm deploy --legacy 在这里会跳过安装,产出空的 node_modules)
+RUN rm -rf node_modules apps/*/node_modules packages/*/node_modules \
+    && pnpm install --frozen-lockfile --prod --filter "@ai-personal/server..."
 
 FROM ${NODE_IMAGE} AS runtime
 ARG SOURCE_URL=""
@@ -29,15 +30,23 @@ ENV NODE_ENV=production \
     NODE_OPTIONS=--max-old-space-size=384 \
     AIP_HOST=0.0.0.0 \
     AIP_PORT=8787 \
-    AIP_WEB_DIR=/app/web \
+    AIP_WEB_DIR=/app/apps/web/dist \
     AIP_SOURCE_URL=${SOURCE_URL}
 WORKDIR /app
-COPY --from=build --chown=node:node /out ./
-COPY --from=build --chown=node:node /repo/apps/web/dist ./web
-COPY --from=build --chown=node:node /repo/LICENSE /repo/NOTICE ./
+# 代码与依赖归 root 所有,运行用户 node 只读;只有 /data 可写
+COPY --from=build /repo/LICENSE /repo/NOTICE /repo/package.json ./
+COPY --from=build /repo/node_modules ./node_modules
+COPY --from=build /repo/packages/shared/package.json ./packages/shared/
+COPY --from=build /repo/packages/shared/dist ./packages/shared/dist
+COPY --from=build /repo/packages/shared/node_modules ./packages/shared/node_modules
+COPY --from=build /repo/apps/server/package.json ./apps/server/
+COPY --from=build /repo/apps/server/dist ./apps/server/dist
+COPY --from=build /repo/apps/server/node_modules ./apps/server/node_modules
+COPY --from=build /repo/apps/web/dist ./apps/web/dist
 RUN mkdir -p /data && chown node:node /data
 VOLUME ["/data"]
 USER node
+WORKDIR /app/apps/server
 EXPOSE 8787
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD ["node", "-e", "fetch('http://127.0.0.1:8787/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
