@@ -1,183 +1,200 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 尹绪柏 (Theodore Yin)
 
-// Drizzle 表定义,只用于类型化查询;真正的结构以 migrations/ 中的 SQL 为准,
-// 两者一致性由 schema.test.ts 校验。约束(CHECK、外键、部分索引)只写在 SQL 中。
-import { integer, primaryKey, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+// 各表的列清单与行类型。结构以 migrations/ 中的 SQL 为准,两者一致性由 repos.test.ts 校验。
+// 不使用 ORM:drizzle-orm 0.45 仅加载就占用约 140 MB 堆内存,超出 2GB 机器的预算(ADR 0005)。
 
-export const owners = sqliteTable('owners', {
-    id: text('id').primaryKey(),
-    username: text('username').notNull(),
-    passwordHash: text('password_hash').notNull(),
-    createdAt: text('created_at').notNull(),
-    updatedAt: text('updated_at').notNull(),
-});
+/** 表名 → 列名(snake_case,与 SQL 一致)。 */
+export const TABLE_COLUMNS = {
+    owners: ['id', 'username', 'password_hash', 'created_at', 'updated_at'],
+    auth_sessions: ['id', 'owner_id', 'csrf_hash', 'created_at', 'expires_at', 'last_seen_at'],
+    access_tokens: ['id', 'owner_id', 'name', 'token_hash', 'created_at', 'last_used_at', 'expires_at', 'revoked_at'],
+    model_profiles: [
+        'id',
+        'owner_id',
+        'label',
+        'kind',
+        'base_url',
+        'api_key_ref',
+        'model',
+        'purpose_json',
+        'context_window',
+        'params_json',
+        'created_at',
+        'updated_at',
+    ],
+    settings: ['owner_id', 'key', 'value_json', 'updated_at'],
+    sessions: [
+        'id',
+        'owner_id',
+        'title',
+        'model_profile_id',
+        'forked_from_session_id',
+        'forked_from_message_id',
+        'last_message_at',
+        'created_at',
+        'updated_at',
+    ],
+    messages: [
+        'id',
+        'session_id',
+        'owner_id',
+        'seq',
+        'role',
+        'parts_json',
+        'status',
+        'run_id',
+        'parent_message_id',
+        'model_profile_id',
+        'client_message_id',
+        'usage_json',
+        'created_at',
+        'updated_at',
+    ],
+    runs: [
+        'id',
+        'session_id',
+        'owner_id',
+        'status',
+        'input_message_id',
+        'output_message_id',
+        'error_json',
+        'started_at',
+        'finished_at',
+    ],
+    events: ['seq', 'owner_id', 'session_id', 'run_id', 'type', 'payload_json', 'created_at'],
+    session_summaries: ['id', 'session_id', 'from_seq', 'to_seq', 'summary', 'created_at'],
+    items: [
+        'id',
+        'owner_id',
+        'kind',
+        'type',
+        'source',
+        'source_ref',
+        'title',
+        'summary',
+        'icon',
+        'color',
+        'child_count',
+        'descendant_count',
+        'meta',
+        'created_at',
+        'updated_at',
+        'deleted_at',
+    ],
+    item_edges: ['parent_id', 'child_id', 'rel', 'position', 'primary_edge'],
+    memory_facts: [
+        'item_id',
+        'owner_id',
+        'mem_type',
+        'subtype',
+        'entity_key',
+        'cardinality',
+        'value_json',
+        'status',
+        'domain',
+        'sensitivity',
+        'confidence',
+        'origin',
+        'created_at',
+        'updated_at',
+    ],
+    memory_sources: [
+        'id',
+        'memory_id',
+        'session_id',
+        'user_message_id',
+        'answer_message_id',
+        'source_item_id',
+        'excerpt',
+        'created_at',
+    ],
+} as const satisfies Record<string, readonly string[]>;
 
-export const authSessions = sqliteTable('auth_sessions', {
-    id: text('id').primaryKey(),
-    ownerId: text('owner_id').notNull(),
-    csrfHash: text('csrf_hash').notNull(),
-    createdAt: text('created_at').notNull(),
-    expiresAt: text('expires_at').notNull(),
-    lastSeenAt: text('last_seen_at').notNull(),
-});
+export type TableName = keyof typeof TABLE_COLUMNS;
 
-export const accessTokens = sqliteTable('access_tokens', {
-    id: text('id').primaryKey(),
-    ownerId: text('owner_id').notNull(),
-    name: text('name').notNull(),
-    tokenHash: text('token_hash').notNull(),
-    createdAt: text('created_at').notNull(),
-    lastUsedAt: text('last_used_at'),
-    expiresAt: text('expires_at'),
-    revokedAt: text('revoked_at'),
-});
+const camel = (s: string) => s.replace(/_([a-z])/g, (_, ch: string) => ch.toUpperCase());
 
-export const modelProfiles = sqliteTable('model_profiles', {
-    id: text('id').primaryKey(),
-    ownerId: text('owner_id').notNull(),
-    label: text('label').notNull(),
-    kind: text('kind', { enum: ['openai-compatible', 'anthropic', 'gemini'] }).notNull(),
-    baseUrl: text('base_url'),
-    apiKeyRef: text('api_key_ref'),
-    model: text('model').notNull(),
-    purposeJson: text('purpose_json').notNull(),
-    contextWindow: integer('context_window'),
-    paramsJson: text('params_json'),
-    createdAt: text('created_at').notNull(),
-    updatedAt: text('updated_at').notNull(),
-});
+/** 生成 `col AS "camelCol", …` 的 SELECT 列表;prefix 用于联表时限定表名。 */
+export function selectList(table: TableName, prefix = table): string {
+    return TABLE_COLUMNS[table].map((c) => `${prefix}.${c} AS "${camel(c)}"`).join(', ');
+}
 
-export const settings = sqliteTable(
-    'settings',
-    {
-        ownerId: text('owner_id').notNull(),
-        key: text('key').notNull(),
-        valueJson: text('value_json').notNull(),
-        updatedAt: text('updated_at').notNull(),
-    },
-    (t) => [primaryKey({ columns: [t.ownerId, t.key] })],
-);
+export interface OwnerRow {
+    id: string;
+    username: string;
+    passwordHash: string;
+    createdAt: string;
+    updatedAt: string;
+}
 
-export const sessions = sqliteTable('sessions', {
-    id: text('id').primaryKey(),
-    ownerId: text('owner_id').notNull(),
-    title: text('title').notNull(),
-    modelProfileId: text('model_profile_id'),
-    forkedFromSessionId: text('forked_from_session_id'),
-    forkedFromMessageId: text('forked_from_message_id'),
-    lastMessageAt: text('last_message_at'),
-    createdAt: text('created_at').notNull(),
-    updatedAt: text('updated_at').notNull(),
-});
+export interface SessionRow {
+    id: string;
+    ownerId: string;
+    title: string;
+    modelProfileId: string | null;
+    forkedFromSessionId: string | null;
+    forkedFromMessageId: string | null;
+    lastMessageAt: string | null;
+    createdAt: string;
+    updatedAt: string;
+}
 
-export const messages = sqliteTable('messages', {
-    id: text('id').primaryKey(),
-    sessionId: text('session_id').notNull(),
-    ownerId: text('owner_id').notNull(),
-    seq: integer('seq').notNull(),
-    role: text('role', { enum: ['user', 'assistant', 'system'] }).notNull(),
-    partsJson: text('parts_json').notNull(),
-    status: text('status', { enum: ['streaming', 'complete', 'error', 'cancelled'] }).notNull(),
-    runId: text('run_id'),
-    parentMessageId: text('parent_message_id'),
-    modelProfileId: text('model_profile_id'),
-    clientMessageId: text('client_message_id'),
-    usageJson: text('usage_json'),
-    createdAt: text('created_at').notNull(),
-    updatedAt: text('updated_at').notNull(),
-});
+export interface MessageRow {
+    id: string;
+    sessionId: string;
+    ownerId: string;
+    seq: number;
+    role: 'user' | 'assistant' | 'system';
+    partsJson: string;
+    status: 'streaming' | 'complete' | 'error' | 'cancelled';
+    runId: string | null;
+    parentMessageId: string | null;
+    modelProfileId: string | null;
+    clientMessageId: string | null;
+    usageJson: string | null;
+    createdAt: string;
+    updatedAt: string;
+}
 
-export const runs = sqliteTable('runs', {
-    id: text('id').primaryKey(),
-    sessionId: text('session_id').notNull(),
-    ownerId: text('owner_id').notNull(),
-    status: text('status', {
-        enum: ['queued', 'running', 'waiting_approval', 'succeeded', 'failed', 'cancelled'],
-    }).notNull(),
-    inputMessageId: text('input_message_id').notNull(),
-    outputMessageId: text('output_message_id'),
-    errorJson: text('error_json'),
-    startedAt: text('started_at').notNull(),
-    finishedAt: text('finished_at'),
-});
+export interface RunRow {
+    id: string;
+    sessionId: string;
+    ownerId: string;
+    status: 'queued' | 'running' | 'waiting_approval' | 'succeeded' | 'failed' | 'cancelled';
+    inputMessageId: string;
+    outputMessageId: string | null;
+    errorJson: string | null;
+    startedAt: string;
+    finishedAt: string | null;
+}
 
-export const events = sqliteTable('events', {
-    seq: integer('seq').primaryKey({ autoIncrement: true }),
-    ownerId: text('owner_id').notNull(),
-    sessionId: text('session_id'),
-    runId: text('run_id'),
-    type: text('type').notNull(),
-    payloadJson: text('payload_json').notNull(),
-    createdAt: text('created_at').notNull(),
-});
+export interface EventRow {
+    seq: number;
+    ownerId: string;
+    sessionId: string | null;
+    runId: string | null;
+    type: string;
+    payloadJson: string;
+    createdAt: string;
+}
 
-export const sessionSummaries = sqliteTable('session_summaries', {
-    id: text('id').primaryKey(),
-    sessionId: text('session_id').notNull(),
-    fromSeq: integer('from_seq').notNull(),
-    toSeq: integer('to_seq').notNull(),
-    summary: text('summary').notNull(),
-    createdAt: text('created_at').notNull(),
-});
+export interface AuthSessionRow {
+    id: string;
+    ownerId: string;
+    csrfHash: string;
+    createdAt: string;
+    expiresAt: string;
+    lastSeenAt: string;
+}
 
-export const items = sqliteTable('items', {
-    id: text('id').primaryKey(),
-    ownerId: text('owner_id').notNull(),
-    kind: text('kind', { enum: ['category', 'content'] }).notNull(),
-    type: text('type').notNull(),
-    source: text('source').notNull(),
-    sourceRef: text('source_ref'),
-    title: text('title').notNull(),
-    summary: text('summary'),
-    icon: text('icon'),
-    color: text('color'),
-    childCount: integer('child_count').notNull(),
-    descendantCount: integer('descendant_count').notNull(),
-    meta: text('meta'),
-    createdAt: text('created_at').notNull(),
-    updatedAt: text('updated_at').notNull(),
-    deletedAt: text('deleted_at'),
-});
-
-export const itemEdges = sqliteTable(
-    'item_edges',
-    {
-        parentId: text('parent_id').notNull(),
-        childId: text('child_id').notNull(),
-        rel: text('rel').notNull(),
-        position: integer('position'),
-        primaryEdge: integer('primary_edge').notNull(),
-    },
-    (t) => [primaryKey({ columns: [t.parentId, t.childId, t.rel] })],
-);
-
-export const memoryFacts = sqliteTable('memory_facts', {
-    itemId: text('item_id').primaryKey(),
-    ownerId: text('owner_id').notNull(),
-    memType: text('mem_type', { enum: ['episodic', 'semantic', 'procedural'] }).notNull(),
-    subtype: text('subtype', { enum: ['profile', 'preference', 'decision', 'task', 'relation'] }),
-    entityKey: text('entity_key'),
-    cardinality: text('cardinality', { enum: ['single', 'multi'] }).notNull(),
-    valueJson: text('value_json'),
-    status: text('status', { enum: ['active', 'superseded', 'conflicted', 'retracted', 'expired'] }).notNull(),
-    domain: text('domain', { enum: ['work', 'life', 'general'] }).notNull(),
-    sensitivity: integer('sensitivity').notNull(),
-    confidence: real('confidence').notNull(),
-    origin: text('origin', {
-        enum: ['user_explicit', 'extracted', 'consolidated', 'manual', 'imported'],
-    }).notNull(),
-    createdAt: text('created_at').notNull(),
-    updatedAt: text('updated_at').notNull(),
-});
-
-export const memorySources = sqliteTable('memory_sources', {
-    id: text('id').primaryKey(),
-    memoryId: text('memory_id').notNull(),
-    sessionId: text('session_id'),
-    userMessageId: text('user_message_id'),
-    answerMessageId: text('answer_message_id'),
-    sourceItemId: text('source_item_id'),
-    excerpt: text('excerpt'),
-    createdAt: text('created_at').notNull(),
-});
+export interface AccessTokenRow {
+    id: string;
+    ownerId: string;
+    name: string;
+    tokenHash: string;
+    createdAt: string;
+    lastUsedAt: string | null;
+    expiresAt: string | null;
+    revokedAt: string | null;
+}

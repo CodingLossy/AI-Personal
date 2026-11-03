@@ -2,15 +2,11 @@
 // Copyright (C) 2026 尹绪柏 (Theodore Yin)
 
 import Database from 'better-sqlite3';
-import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
-import * as schema from './schema.js';
 
 export type Sqlite = Database.Database;
-export type Db = BetterSQLite3Database<typeof schema>;
 
 export interface Connection {
     sqlite: Sqlite;
-    db: Db;
     close(): void;
 }
 
@@ -48,6 +44,5 @@ export function openDatabase(path: string): Connection {
         sqlite.close();
         throw error;
     }
-    const db = drizzle(sqlite, { schema });
-    return { sqlite, db, close: () => sqlite.close() };
+    return { sqlite, close: () => sqlite.close() };
 }
