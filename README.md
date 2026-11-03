@@ -39,6 +39,14 @@ Docker:
 docker compose -f docker/docker-compose.yml up --build
 ```
 
+首次启动时需要创建主人账户(1.0 只有一个账户):
+
+```bash
+curl -X POST http://127.0.0.1:8787/api/v1/auth/setup   -H 'content-type: application/json'   -d '{"username":"owner","password":"至少 12 位的密码"}'
+```
+
+从本机直连时不需要设置码;从其他机器或经过反向代理初始化时,需要在请求中加上 `"setupCode"`,它打印在服务启动日志里(Docker 中用 `docker logs` 查看)。
+
 参与开发请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 许可证

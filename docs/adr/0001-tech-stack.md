@@ -18,7 +18,7 @@ AI-Personal 需要同时满足:可在 2GB 内存服务器常驻、桌面安装�
 | 语言 / 校验 | TypeScript strict + zod(schema 前后端共享)                         |
 | HTTP / WS   | Hono(`@hono/node-server`)                                          |
 | Web UI      | React 19 + Vite(后续加 TanStack Router/Query、Tailwind、shadcn/ui) |
-| 存储(M1 起) | SQLite(better-sqlite3)+ Drizzle ORM + sqlite-vec                   |
+| 存储(M1 起) | SQLite(better-sqlite3,手写参数化 SQL,见 ADR 0005)+ sqlite-vec      |
 | LLM(M1 起)  | Vercel AI SDK,外面再封一层自有 `ModelProvider` 接口                |
 | MCP(M2 起)  | `@modelcontextprotocol/sdk`                                        |
 | 测试        | Vitest(之后加 Playwright、msw、录制回放)                           |

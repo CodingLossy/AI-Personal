@@ -2,12 +2,10 @@
 // Copyright (C) 2026 尹绪柏 (Theodore Yin)
 
 import type { AgentEvent } from '@ai-personal/shared';
-import { is } from 'drizzle-orm';
-import { getTableConfig, SQLiteTable } from 'drizzle-orm/sqlite-core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { InvalidCursorError } from './cursor.js';
 import { newId } from './ids.js';
-import * as schema from './schema.js';
+import { TABLE_COLUMNS } from './schema.js';
 import { createTestDb, fakeClock, type TestDb } from './test-helpers.js';
 
 let t: TestDb;
@@ -291,17 +289,12 @@ describe('items 与记忆子集(ADR 0007)', () => {
     });
 });
 
-describe('Drizzle 表定义与迁移 SQL 一致', () => {
-    const tables = (Object.values(schema) as unknown[]).filter((v): v is SQLiteTable => is(v, SQLiteTable));
-
-    it.each(tables.map((tb) => [getTableConfig(tb).name, tb] as const))('%s', (name, table) => {
-        const dbColumns = (t.conn.sqlite.prepare(`PRAGMA table_info(${name})`).all() as { name: string }[])
-            .map((c) => c.name)
-            .sort();
-        const drizzleColumns = getTableConfig(table)
-            .columns.map((c) => c.name)
-            .sort();
-        expect(drizzleColumns).toEqual(dbColumns);
+describe('列清单与迁移 SQL 一致', () => {
+    it.each(Object.entries(TABLE_COLUMNS))('%s', (name, columns) => {
+        const dbColumns = (t.conn.sqlite.prepare(`PRAGMA table_info(${name})`).all() as { name: string }[]).map(
+            (c) => c.name,
+        );
+        expect([...columns].sort()).toEqual(dbColumns.sort());
     });
 
     it('覆盖了迁移中的全部普通表', () => {
@@ -312,10 +305,8 @@ describe('Drizzle 表定义与迁移 SQL 一致', () => {
                      AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'items_fts%' AND name <> 'schema_migrations'`,
                 )
                 .all() as { name: string }[]
-        )
-            .map((r) => r.name)
-            .sort();
-        expect(tables.map((tb) => getTableConfig(tb).name).sort()).toEqual(dbTables);
+        ).map((r) => r.name);
+        expect(Object.keys(TABLE_COLUMNS).sort()).toEqual(dbTables.sort());
     });
 });
 

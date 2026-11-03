@@ -1,20 +1,43 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 尹绪柏 (Theodore Yin)
 
-type Level = 'debug' | 'info' | 'warn' | 'error';
+import { pino, type DestinationStream, type Logger } from 'pino';
+import type { LogLevel } from './config.js';
+
+export type { Logger };
 
 /**
- * 输出一行 JSON 日志(与 pino 的字段约定一致,M1 换成 pino)。日志只写本地,永不外传。
+ * 可能携带凭据的字段,一律替换为 [REDACTED](ADR 0006 第 3 节)。
+ * 代码本身也不应把请求体、Cookie、Authorization 头写进日志;这里是兜底。
  */
-export function formatLog(level: Level, msg: string, fields: Record<string, unknown> = {}, date = new Date()): string {
-    return JSON.stringify({ time: date.toISOString(), level, msg, ...fields });
-}
+export const REDACT_PATHS = [
+    'password',
+    '*.password',
+    'token',
+    '*.token',
+    'apiKey',
+    '*.apiKey',
+    'authorization',
+    '*.authorization',
+    'headers.authorization',
+    'headers.cookie',
+    'cookie',
+    '*.cookie',
+    'setupCode',
+    'csrfToken',
+    '*.csrfToken',
+];
 
-export function log(level: Level, msg: string, fields?: Record<string, unknown>): void {
-    const line = formatLog(level, msg, fields);
-    if (level === 'error') {
-        console.error(line);
-    } else {
-        console.log(line);
-    }
+/** JSON 行日志(time / level / msg + 字段),只写本地,永不外传。 */
+export function createLogger(options: { level?: LogLevel; destination?: DestinationStream } = {}): Logger {
+    return pino(
+        {
+            level: options.level ?? 'info',
+            base: null,
+            timestamp: pino.stdTimeFunctions.isoTime,
+            formatters: { level: (label) => ({ level: label }) },
+            redact: { paths: REDACT_PATHS, censor: '[REDACTED]' },
+        },
+        options.destination,
+    );
 }

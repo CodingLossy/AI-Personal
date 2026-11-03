@@ -10,7 +10,7 @@
 
 ## 决定
 
-### 数据模型(SQLite + Drizzle,`packages/items`)
+### 数据模型(SQLite,`packages/storage` 中的手写 SQL 迁移;查询逻辑在 `packages/items`)
 
 ```sql
 CREATE TABLE items (

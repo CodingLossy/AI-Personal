@@ -31,7 +31,8 @@ ENV NODE_ENV=production \
     AIP_HOST=0.0.0.0 \
     AIP_PORT=8787 \
     AIP_WEB_DIR=/app/apps/web/dist \
-    AIP_SOURCE_URL=${SOURCE_URL}
+    AIP_SOURCE_URL=${SOURCE_URL} \
+    AIP_DATA_DIR=/data
 WORKDIR /app
 # 代码与依赖归 root 所有,运行用户 node 只读;只有 /data 可写
 COPY --from=build /repo/LICENSE /repo/NOTICE /repo/package.json ./
@@ -39,6 +40,9 @@ COPY --from=build /repo/node_modules ./node_modules
 COPY --from=build /repo/packages/shared/package.json ./packages/shared/
 COPY --from=build /repo/packages/shared/dist ./packages/shared/dist
 COPY --from=build /repo/packages/shared/node_modules ./packages/shared/node_modules
+COPY --from=build /repo/packages/storage/package.json ./packages/storage/
+COPY --from=build /repo/packages/storage/dist ./packages/storage/dist
+COPY --from=build /repo/packages/storage/node_modules ./packages/storage/node_modules
 COPY --from=build /repo/apps/server/package.json ./apps/server/
 COPY --from=build /repo/apps/server/dist ./apps/server/dist
 COPY --from=build /repo/apps/server/node_modules ./apps/server/node_modules

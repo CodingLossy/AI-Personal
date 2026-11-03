@@ -13,12 +13,12 @@ import type {
     Session,
     Usage,
 } from '@ai-personal/shared';
-import { and, asc, desc, eq, gt, inArray, isNull, lt, lte, max, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import { createAuthRepositories } from './auth.js';
 import { decodeCursor, encodeCursor, type Page } from './cursor.js';
 import type { Connection } from './db.js';
 import { newId } from './ids.js';
-import * as t from './schema.js';
+import { selectList, type EventRow, type MessageRow, type OwnerRow, type RunRow, type SessionRow } from './schema.js';
 
 export interface RepoOptions {
     now?: () => Date;
@@ -48,58 +48,125 @@ function parseJson<T>(value: string | null): T | null {
     return value === null ? null : (JSON.parse(value) as T);
 }
 
-/** 各领域仓储的统一入口;其他包只通过这里访问数据库(ADR 0005)。 */
+function toSession(row: SessionRow & { activeRunId: string | null }): Session {
+    return {
+        id: row.id,
+        title: row.title,
+        modelProfileId: row.modelProfileId,
+        forkedFromSessionId: row.forkedFromSessionId,
+        forkedFromMessageId: row.forkedFromMessageId,
+        lastMessageAt: row.lastMessageAt,
+        activeRunId: row.activeRunId,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+    };
+}
+
+function toMessage(row: MessageRow): Message {
+    return {
+        id: row.id,
+        sessionId: row.sessionId,
+        seq: row.seq,
+        role: row.role,
+        parts: parseJson<MessagePart[]>(row.partsJson) ?? [],
+        status: row.status,
+        runId: row.runId,
+        parentMessageId: row.parentMessageId,
+        modelProfileId: row.modelProfileId,
+        usage: parseJson<Usage>(row.usageJson),
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+    };
+}
+
+function toRun(row: RunRow): Run {
+    return {
+        id: row.id,
+        sessionId: row.sessionId,
+        status: row.status,
+        inputMessageId: row.inputMessageId,
+        outputMessageId: row.outputMessageId,
+        startedAt: row.startedAt,
+        finishedAt: row.finishedAt,
+    };
+}
+
+function toEnvelope(row: EventRow): EventEnvelope {
+    return {
+        seq: row.seq,
+        at: row.createdAt,
+        sessionId: row.sessionId,
+        event: JSON.parse(row.payloadJson) as AgentEvent,
+    };
+}
+
+/** 各领域仓储的统一入口;其他包只通过这里访问数据库(ADR 0005)。SQL 全部使用参数绑定。 */
 export function createRepositories(conn: Connection, options: RepoOptions = {}) {
-    const { db, sqlite } = conn;
+    const { sqlite } = conn;
     const now = options.now ?? (() => new Date());
     const iso = () => now().toISOString();
 
     // ---------- owners ----------
+    const ownerQ = {
+        count: sqlite.prepare<[], { n: number }>('SELECT count(*) AS n FROM owners'),
+        insert: sqlite.prepare(
+            `INSERT INTO owners (id, username, password_hash, created_at, updated_at)
+             VALUES (@id, @username, @passwordHash, @createdAt, @updatedAt)`,
+        ),
+        byId: sqlite.prepare<[string], OwnerRow>(`SELECT ${selectList('owners')} FROM owners WHERE id = ?`),
+        byUsername: sqlite.prepare<[string], OwnerRow>(`SELECT ${selectList('owners')} FROM owners WHERE username = ?`),
+    };
+
     const owners = {
         count(): number {
-            return (
-                db
-                    .select({ n: sql<number>`count(*)` })
-                    .from(t.owners)
-                    .get()?.n ?? 0
-            );
+            return ownerQ.count.get()?.n ?? 0;
         },
         create(input: { username: string; passwordHash: string }) {
             const at = iso();
             const row = { id: newId(now()), ...input, createdAt: at, updatedAt: at };
-            db.insert(t.owners).values(row).run();
+            ownerQ.insert.run(row);
             return { id: row.id, username: row.username, createdAt: at };
         },
-        get(id: string) {
-            return db.select().from(t.owners).where(eq(t.owners.id, id)).get() ?? null;
+        get(id: string): OwnerRow | null {
+            return ownerQ.byId.get(id) ?? null;
         },
-        getByUsername(username: string) {
-            return db.select().from(t.owners).where(eq(t.owners.username, username)).get() ?? null;
+        getByUsername(username: string): OwnerRow | null {
+            return ownerQ.byUsername.get(username) ?? null;
         },
     };
 
     // ---------- sessions ----------
-    const activeRunId = sql<string | null>`(
-        SELECT r.id FROM runs r
-        WHERE r.session_id = "sessions"."id" AND r.finished_at IS NULL
-        ORDER BY r.started_at DESC LIMIT 1
-    )`;
+    const sessionSelect = `SELECT ${selectList('sessions')}, (
+            SELECT r.id FROM runs r
+            WHERE r.session_id = sessions.id AND r.finished_at IS NULL
+            ORDER BY r.started_at DESC LIMIT 1
+        ) AS "activeRunId"
+        FROM sessions`;
+    type SessionSelectRow = SessionRow & { activeRunId: string | null };
 
-    function toSession(row: typeof t.sessions.$inferSelect & { activeRunId: string | null }): Session {
-        return {
-            id: row.id,
-            title: row.title,
-            modelProfileId: row.modelProfileId,
-            forkedFromSessionId: row.forkedFromSessionId,
-            forkedFromMessageId: row.forkedFromMessageId,
-            lastMessageAt: row.lastMessageAt,
-            activeRunId: row.activeRunId,
-            createdAt: row.createdAt,
-            updatedAt: row.updatedAt,
-        };
-    }
-
-    const sessionColumns = { ...getColumns(t.sessions), activeRunId };
+    const sessionQ = {
+        insert: sqlite.prepare(
+            `INSERT INTO sessions (id, owner_id, title, model_profile_id, created_at, updated_at)
+             VALUES (@id, @ownerId, @title, @modelProfileId, @createdAt, @updatedAt)`,
+        ),
+        get: sqlite.prepare<[string, string], SessionSelectRow>(`${sessionSelect} WHERE owner_id = ? AND id = ?`),
+        first: sqlite.prepare<[string, number], SessionSelectRow>(
+            `${sessionSelect} WHERE owner_id = ? ORDER BY updated_at DESC, id DESC LIMIT ?`,
+        ),
+        after: sqlite.prepare<[string, string, string, string, number], SessionSelectRow>(
+            `${sessionSelect} WHERE owner_id = ? AND (updated_at < ? OR (updated_at = ? AND id < ?))
+             ORDER BY updated_at DESC, id DESC LIMIT ?`,
+        ),
+        update: sqlite.prepare(
+            `UPDATE sessions SET
+                title = coalesce(@title, title),
+                model_profile_id = CASE WHEN @setProfile = 1 THEN @modelProfileId ELSE model_profile_id END,
+                updated_at = @updatedAt
+             WHERE owner_id = @ownerId AND id = @id`,
+        ),
+        delete: sqlite.prepare('DELETE FROM sessions WHERE owner_id = ? AND id = ?'),
+        touch: sqlite.prepare('UPDATE sessions SET last_message_at = ?, updated_at = ? WHERE id = ?'),
+    };
 
     const sessions = {
         create(
@@ -108,46 +175,26 @@ export function createRepositories(conn: Connection, options: RepoOptions = {}) 
         ): Session {
             const at = iso();
             const id = newId(now());
-            db.insert(t.sessions)
-                .values({
-                    id,
-                    ownerId,
-                    title: input.title ?? '',
-                    modelProfileId: input.modelProfileId ?? null,
-                    createdAt: at,
-                    updatedAt: at,
-                })
-                .run();
+            sessionQ.insert.run({
+                id,
+                ownerId,
+                title: input.title ?? '',
+                modelProfileId: input.modelProfileId ?? null,
+                createdAt: at,
+                updatedAt: at,
+            });
             return sessions.get(ownerId, id)!;
         },
         get(ownerId: string, id: string): Session | null {
-            const row = db
-                .select(sessionColumns)
-                .from(t.sessions)
-                .where(and(eq(t.sessions.ownerId, ownerId), eq(t.sessions.id, id)))
-                .get();
+            const row = sessionQ.get.get(ownerId, id);
             return row ? toSession(row) : null;
         },
         /** 按 updatedAt 倒序;游标为最后一项的 (updatedAt, id)。 */
         list(ownerId: string, page: PageRequest): Page<Session> {
             const after = page.cursor ? decodeCursor(page.cursor, sessionCursor) : null;
-            const rows = db
-                .select(sessionColumns)
-                .from(t.sessions)
-                .where(
-                    and(
-                        eq(t.sessions.ownerId, ownerId),
-                        after
-                            ? or(
-                                  lt(t.sessions.updatedAt, after.u),
-                                  and(eq(t.sessions.updatedAt, after.u), lt(t.sessions.id, after.id)),
-                              )
-                            : undefined,
-                    ),
-                )
-                .orderBy(desc(t.sessions.updatedAt), desc(t.sessions.id))
-                .limit(page.limit + 1)
-                .all();
+            const rows = after
+                ? sessionQ.after.all(ownerId, after.u, after.u, after.id, page.limit + 1)
+                : sessionQ.first.all(ownerId, page.limit + 1);
             const items = rows.slice(0, page.limit).map(toSession);
             const last = items.at(-1);
             return {
@@ -160,128 +207,109 @@ export function createRepositories(conn: Connection, options: RepoOptions = {}) 
             id: string,
             patch: { title?: string | undefined; modelProfileId?: string | null | undefined },
         ): Session | null {
-            const values: Partial<typeof t.sessions.$inferInsert> = { updatedAt: iso() };
-            if (patch.title !== undefined) values.title = patch.title;
-            if (patch.modelProfileId !== undefined) values.modelProfileId = patch.modelProfileId;
-            db.update(t.sessions)
-                .set(values)
-                .where(and(eq(t.sessions.ownerId, ownerId), eq(t.sessions.id, id)))
-                .run();
+            sessionQ.update.run({
+                ownerId,
+                id,
+                title: patch.title ?? null,
+                setProfile: patch.modelProfileId === undefined ? 0 : 1,
+                modelProfileId: patch.modelProfileId ?? null,
+                updatedAt: iso(),
+            });
             return sessions.get(ownerId, id);
         },
         /** 删除会话;消息、运行、事件、摘要由外键级联删除。 */
         delete(ownerId: string, id: string): boolean {
-            const result = db
-                .delete(t.sessions)
-                .where(and(eq(t.sessions.ownerId, ownerId), eq(t.sessions.id, id)))
-                .run();
-            return result.changes > 0;
+            return sessionQ.delete.run(ownerId, id).changes > 0;
         },
     };
 
     // ---------- messages ----------
-    function toMessage(row: typeof t.messages.$inferSelect): Message {
-        return {
-            id: row.id,
-            sessionId: row.sessionId,
-            seq: row.seq,
-            role: row.role,
-            parts: parseJson<MessagePart[]>(row.partsJson) ?? [],
-            status: row.status,
-            runId: row.runId,
-            parentMessageId: row.parentMessageId,
-            modelProfileId: row.modelProfileId,
-            usage: parseJson<Usage>(row.usageJson),
-            createdAt: row.createdAt,
-            updatedAt: row.updatedAt,
-        };
-    }
+    const messageSelect = `SELECT ${selectList('messages')} FROM messages`;
+    const messageQ = {
+        nextSeq: sqlite.prepare<[string], { s: number }>(
+            'SELECT coalesce(max(seq), 0) + 1 AS s FROM messages WHERE session_id = ?',
+        ),
+        insert: sqlite.prepare(
+            `INSERT INTO messages (id, session_id, owner_id, seq, role, parts_json, status, run_id,
+                                   parent_message_id, model_profile_id, client_message_id, created_at, updated_at)
+             VALUES (@id, @sessionId, @ownerId, @seq, @role, @partsJson, @status, @runId,
+                     @parentMessageId, @modelProfileId, @clientMessageId, @createdAt, @updatedAt)`,
+        ),
+        byId: sqlite.prepare<[string], MessageRow>(`${messageSelect} WHERE id = ?`),
+        byOwnerAndId: sqlite.prepare<[string, string], MessageRow>(`${messageSelect} WHERE owner_id = ? AND id = ?`),
+        byClientId: sqlite.prepare<[string, string], MessageRow>(
+            `${messageSelect} WHERE session_id = ? AND client_message_id = ?`,
+        ),
+        update: sqlite.prepare(
+            `UPDATE messages SET
+                parts_json = coalesce(@partsJson, parts_json),
+                status = coalesce(@status, status),
+                usage_json = CASE WHEN @setUsage = 1 THEN @usageJson ELSE usage_json END,
+                run_id = CASE WHEN @setRun = 1 THEN @runId ELSE run_id END,
+                updated_at = @updatedAt
+             WHERE id = @id`,
+        ),
+        list: sqlite.prepare<[string, string, number, number], MessageRow>(
+            `${messageSelect} WHERE owner_id = ? AND session_id = ? AND seq > ? ORDER BY seq LIMIT ?`,
+        ),
+    };
 
+    /** 追加消息:seq 在同一事务内取「当前最大值 + 1」,并更新会话的 lastMessageAt。 */
     const appendMessage = sqlite.transaction(
-        (ownerId: string, sessionId: string, input: AppendMessageInput): Message => {
+        (ownerId: string, sessionId: string, input: AppendMessageInput): MessageRow => {
             const at = iso();
-            const next =
-                (db
-                    .select({ s: max(t.messages.seq) })
-                    .from(t.messages)
-                    .where(eq(t.messages.sessionId, sessionId))
-                    .get()?.s ?? 0) + 1;
             const id = newId(now());
-            db.insert(t.messages)
-                .values({
-                    id,
-                    sessionId,
-                    ownerId,
-                    seq: next,
-                    role: input.role,
-                    partsJson: JSON.stringify(input.parts),
-                    status: input.status,
-                    runId: input.runId ?? null,
-                    parentMessageId: input.parentMessageId ?? null,
-                    modelProfileId: input.modelProfileId ?? null,
-                    clientMessageId: input.clientMessageId ?? null,
-                    createdAt: at,
-                    updatedAt: at,
-                })
-                .run();
-            db.update(t.sessions).set({ lastMessageAt: at, updatedAt: at }).where(eq(t.sessions.id, sessionId)).run();
-            return toMessage(db.select().from(t.messages).where(eq(t.messages.id, id)).get()!);
+            messageQ.insert.run({
+                id,
+                sessionId,
+                ownerId,
+                seq: messageQ.nextSeq.get(sessionId)!.s,
+                role: input.role,
+                partsJson: JSON.stringify(input.parts),
+                status: input.status,
+                runId: input.runId ?? null,
+                parentMessageId: input.parentMessageId ?? null,
+                modelProfileId: input.modelProfileId ?? null,
+                clientMessageId: input.clientMessageId ?? null,
+                createdAt: at,
+                updatedAt: at,
+            });
+            sessionQ.touch.run(at, at, sessionId);
+            return messageQ.byId.get(id)!;
         },
     );
 
     const messages = {
-        /** 追加消息:seq 在同一事务内取「当前最大值 + 1」,并更新会话的 lastMessageAt。 */
         append(ownerId: string, sessionId: string, input: AppendMessageInput): Message {
-            return appendMessage(ownerId, sessionId, input);
+            return toMessage(appendMessage(ownerId, sessionId, input));
         },
         get(ownerId: string, id: string): Message | null {
-            const row = db
-                .select()
-                .from(t.messages)
-                .where(and(eq(t.messages.ownerId, ownerId), eq(t.messages.id, id)))
-                .get();
+            const row = messageQ.byOwnerAndId.get(ownerId, id);
             return row ? toMessage(row) : null;
         },
         findByClientMessageId(sessionId: string, clientMessageId: string): Message | null {
-            const row = db
-                .select()
-                .from(t.messages)
-                .where(and(eq(t.messages.sessionId, sessionId), eq(t.messages.clientMessageId, clientMessageId)))
-                .get();
+            const row = messageQ.byClientId.get(sessionId, clientMessageId);
             return row ? toMessage(row) : null;
         },
         update(
             id: string,
-            patch: {
-                parts?: MessagePart[];
-                status?: MessageStatus;
-                usage?: Usage | null;
-                runId?: string | null;
-            },
+            patch: { parts?: MessagePart[]; status?: MessageStatus; usage?: Usage | null; runId?: string | null },
         ): void {
-            const values: Partial<typeof t.messages.$inferInsert> = { updatedAt: iso() };
-            if (patch.parts !== undefined) values.partsJson = JSON.stringify(patch.parts);
-            if (patch.status !== undefined) values.status = patch.status;
-            if (patch.usage !== undefined) values.usageJson = patch.usage === null ? null : JSON.stringify(patch.usage);
-            if (patch.runId !== undefined) values.runId = patch.runId;
-            db.update(t.messages).set(values).where(eq(t.messages.id, id)).run();
+            messageQ.update.run({
+                id,
+                partsJson: patch.parts === undefined ? null : JSON.stringify(patch.parts),
+                status: patch.status ?? null,
+                setUsage: patch.usage === undefined ? 0 : 1,
+                usageJson: patch.usage ? JSON.stringify(patch.usage) : null,
+                setRun: patch.runId === undefined ? 0 : 1,
+                runId: patch.runId ?? null,
+                updatedAt: iso(),
+            });
         },
         /** 按 seq 升序;游标为最后一项的 seq。 */
         list(ownerId: string, sessionId: string, page: PageRequest): Page<Message> {
-            const after = page.cursor ? decodeCursor(page.cursor, seqCursor) : null;
-            const rows = db
-                .select()
-                .from(t.messages)
-                .where(
-                    and(
-                        eq(t.messages.ownerId, ownerId),
-                        eq(t.messages.sessionId, sessionId),
-                        after ? gt(t.messages.seq, after.s) : undefined,
-                    ),
-                )
-                .orderBy(asc(t.messages.seq))
-                .limit(page.limit + 1)
-                .all();
+            const after = page.cursor ? decodeCursor(page.cursor, seqCursor).s : 0;
+            const rows = messageQ.list.all(ownerId, sessionId, after, page.limit + 1);
             const items = rows.slice(0, page.limit).map(toMessage);
             const last = items.at(-1);
             return { items, nextCursor: rows.length > page.limit && last ? encodeCursor({ s: last.seq }) : null };
@@ -289,32 +317,35 @@ export function createRepositories(conn: Connection, options: RepoOptions = {}) 
     };
 
     // ---------- runs ----------
-    function toRun(row: typeof t.runs.$inferSelect): Run {
-        return {
-            id: row.id,
-            sessionId: row.sessionId,
-            status: row.status,
-            inputMessageId: row.inputMessageId,
-            outputMessageId: row.outputMessageId,
-            startedAt: row.startedAt,
-            finishedAt: row.finishedAt,
-        };
-    }
+    const runSelect = `SELECT ${selectList('runs')} FROM runs`;
+    const runQ = {
+        insert: sqlite.prepare(
+            `INSERT INTO runs (id, session_id, owner_id, status, input_message_id, started_at)
+             VALUES (@id, @sessionId, @ownerId, 'queued', @inputMessageId, @startedAt)`,
+        ),
+        byId: sqlite.prepare<[string], RunRow>(`${runSelect} WHERE id = ?`),
+        byOwnerAndId: sqlite.prepare<[string, string], RunRow>(`${runSelect} WHERE owner_id = ? AND id = ?`),
+        setStatus: sqlite.prepare(
+            `UPDATE runs SET
+                status = @status,
+                finished_at = CASE WHEN @terminal = 1 THEN @now ELSE finished_at END,
+                output_message_id = CASE WHEN @setOutput = 1 THEN @outputMessageId ELSE output_message_id END,
+                error_json = CASE WHEN @setError = 1 THEN @errorJson ELSE error_json END
+             WHERE id = @id`,
+        ),
+        active: sqlite.prepare<[string], RunRow>(
+            `${runSelect} WHERE owner_id = ? AND finished_at IS NULL ORDER BY started_at`,
+        ),
+    };
 
     const runs = {
         create(ownerId: string, input: { sessionId: string; inputMessageId: string }): Run {
             const id = newId(now());
-            db.insert(t.runs)
-                .values({ id, ownerId, ...input, status: 'queued', startedAt: iso() })
-                .run();
-            return toRun(db.select().from(t.runs).where(eq(t.runs.id, id)).get()!);
+            runQ.insert.run({ id, ownerId, ...input, startedAt: iso() });
+            return toRun(runQ.byId.get(id)!);
         },
         get(ownerId: string, id: string): Run | null {
-            const row = db
-                .select()
-                .from(t.runs)
-                .where(and(eq(t.runs.ownerId, ownerId), eq(t.runs.id, id)))
-                .get();
+            const row = runQ.byOwnerAndId.get(ownerId, id);
             return row ? toRun(row) : null;
         },
         /** 进入 succeeded / failed / cancelled 时写入 finishedAt。 */
@@ -323,32 +354,44 @@ export function createRepositories(conn: Connection, options: RepoOptions = {}) 
             status: RunStatus,
             extra: { outputMessageId?: string | null; error?: unknown } = {},
         ): void {
-            const values: Partial<typeof t.runs.$inferInsert> = { status };
-            if (TERMINAL_RUN_STATUSES.includes(status)) values.finishedAt = iso();
-            if (extra.outputMessageId !== undefined) values.outputMessageId = extra.outputMessageId;
-            if (extra.error !== undefined) values.errorJson = JSON.stringify(extra.error);
-            db.update(t.runs).set(values).where(eq(t.runs.id, id)).run();
+            runQ.setStatus.run({
+                id,
+                status,
+                terminal: TERMINAL_RUN_STATUSES.includes(status) ? 1 : 0,
+                now: iso(),
+                setOutput: extra.outputMessageId === undefined ? 0 : 1,
+                outputMessageId: extra.outputMessageId ?? null,
+                setError: extra.error === undefined ? 0 : 1,
+                errorJson: extra.error === undefined ? null : JSON.stringify(extra.error),
+            });
         },
         listActive(ownerId: string): Run[] {
-            return db
-                .select()
-                .from(t.runs)
-                .where(and(eq(t.runs.ownerId, ownerId), isNull(t.runs.finishedAt)))
-                .orderBy(asc(t.runs.startedAt))
-                .all()
-                .map(toRun);
+            return runQ.active.all(ownerId).map(toRun);
         },
     };
 
     // ---------- events ----------
-    function toEnvelope(row: typeof t.events.$inferSelect): EventEnvelope {
-        return {
-            seq: row.seq,
-            at: row.createdAt,
-            sessionId: row.sessionId,
-            event: JSON.parse(row.payloadJson) as AgentEvent,
-        };
-    }
+    const eventSelect = `SELECT ${selectList('events')} FROM events`;
+    const eventQ = {
+        insert: sqlite.prepare<[string, string | null, string | null, string, string, string], EventRow>(
+            `INSERT INTO events (owner_id, session_id, run_id, type, payload_json, created_at)
+             VALUES (?, ?, ?, ?, ?, ?)
+             RETURNING ${selectList('events', 'events')}`,
+        ),
+        after: sqlite.prepare<[string, number, number], EventRow>(
+            `${eventSelect} WHERE owner_id = ? AND seq > ? ORDER BY seq LIMIT ?`,
+        ),
+        runAfter: sqlite.prepare<[string, string, number, number], EventRow>(
+            `${eventSelect} WHERE owner_id = ? AND run_id = ? AND seq > ? ORDER BY seq LIMIT ?`,
+        ),
+        bounds: sqlite.prepare<[string], { lo: number | null; hi: number | null }>(
+            'SELECT min(seq) AS lo, max(seq) AS hi FROM events WHERE owner_id = ?',
+        ),
+        compact: sqlite.prepare(
+            `DELETE FROM events WHERE type = 'text-delta'
+             AND run_id IN (SELECT id FROM runs WHERE finished_at IS NOT NULL AND finished_at <= ?)`,
+        ),
+    };
 
     const events = {
         /** 持久化事件并返回带全局 seq 的信封(ADR 0004)。 */
@@ -356,91 +399,41 @@ export function createRepositories(conn: Connection, options: RepoOptions = {}) 
             ownerId: string,
             input: { sessionId: string | null; runId: string | null; event: AgentEvent },
         ): EventEnvelope {
-            const row = db
-                .insert(t.events)
-                .values({
-                    ownerId,
-                    sessionId: input.sessionId,
-                    runId: input.runId,
-                    type: input.event.type,
-                    payloadJson: JSON.stringify(input.event),
-                    createdAt: iso(),
-                })
-                .returning()
-                .get();
+            const row = eventQ.insert.get(
+                ownerId,
+                input.sessionId,
+                input.runId,
+                input.event.type,
+                JSON.stringify(input.event),
+                iso(),
+            )!;
             return toEnvelope(row);
         },
         /** 某 owner 在 afterSeq 之后的事件(WebSocket 补发)。 */
         listAfter(ownerId: string, afterSeq: number, limit: number): EventEnvelope[] {
-            return db
-                .select()
-                .from(t.events)
-                .where(and(eq(t.events.ownerId, ownerId), gt(t.events.seq, afterSeq)))
-                .orderBy(asc(t.events.seq))
-                .limit(limit)
-                .all()
-                .map(toEnvelope);
+            return eventQ.after.all(ownerId, afterSeq, limit).map(toEnvelope);
         },
         /** 某次运行在 afterSeq 之后的事件(SSE 续看)。 */
         listRunAfter(ownerId: string, runId: string, afterSeq: number, limit: number): EventEnvelope[] {
-            return db
-                .select()
-                .from(t.events)
-                .where(and(eq(t.events.ownerId, ownerId), eq(t.events.runId, runId), gt(t.events.seq, afterSeq)))
-                .orderBy(asc(t.events.seq))
-                .limit(limit)
-                .all()
-                .map(toEnvelope);
+            return eventQ.runAfter.all(ownerId, runId, afterSeq, limit).map(toEnvelope);
         },
         latestSeq(ownerId: string): number {
-            return (
-                db
-                    .select({ s: max(t.events.seq) })
-                    .from(t.events)
-                    .where(eq(t.events.ownerId, ownerId))
-                    .get()?.s ?? 0
-            );
+            return eventQ.bounds.get(ownerId)?.hi ?? 0;
         },
         /** 最早仍可补发的 seq;小于它的请求无法完整补发。 */
         oldestSeq(ownerId: string): number | null {
-            const row = db
-                .select({ s: sql<number | null>`min(${t.events.seq})` })
-                .from(t.events)
-                .where(eq(t.events.ownerId, ownerId))
-                .get();
-            return row?.s ?? null;
+            return eventQ.bounds.get(ownerId)?.lo ?? null;
         },
         /**
          * 删除已结束且早于 finishedBefore 的运行的 text-delta 事件(正文已完整保存在 messages,ADR 0005 第 6 节)。
          * 返回删除的行数。
          */
         compact(finishedBefore: Date): number {
-            const oldRuns = db
-                .select({ id: t.runs.id })
-                .from(t.runs)
-                .where(lte(t.runs.finishedAt, finishedBefore.toISOString()));
-            return db
-                .delete(t.events)
-                .where(and(eq(t.events.type, 'text-delta'), inArray(t.events.runId, oldRuns)))
-                .run().changes;
+            return eventQ.compact.run(finishedBefore.toISOString()).changes;
         },
     };
 
-    return { owners, sessions, messages, runs, events };
+    return { owners, sessions, messages, runs, events, ...createAuthRepositories(conn, now) };
 }
 
 export type Repositories = ReturnType<typeof createRepositories>;
-
-function getColumns<T extends typeof t.sessions>(table: T) {
-    return {
-        id: table.id,
-        ownerId: table.ownerId,
-        title: table.title,
-        modelProfileId: table.modelProfileId,
-        forkedFromSessionId: table.forkedFromSessionId,
-        forkedFromMessageId: table.forkedFromMessageId,
-        lastMessageAt: table.lastMessageAt,
-        createdAt: table.createdAt,
-        updatedAt: table.updatedAt,
-    };
-}

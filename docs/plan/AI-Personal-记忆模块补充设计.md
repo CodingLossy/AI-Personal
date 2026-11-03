@@ -63,7 +63,7 @@
 | source_archive(原文档案) | M1 已有的 `messages` / 事件表,即**唯一事实来源** |
 | compressed_archive(压缩档案) | `session_summaries`(旧轮次的压缩摘要) |
 
-### 2.2 SQL(Drizzle 迁移;每个连接打开时执行 `PRAGMA foreign_keys = ON;`,在 `db.ts` 统一设置并有单测断言)
+### 2.2 SQL(手写 SQL 迁移;每个连接打开时执行 `PRAGMA foreign_keys = ON;`,在 `db.ts` 统一设置并有单测断言)
 
 ```sql
 PRAGMA foreign_keys = ON;

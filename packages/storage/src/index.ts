@@ -6,16 +6,9 @@ import { openDatabase, type Connection } from './db.js';
 import { migrate, type MigrateResult } from './migrate.js';
 import { migrations } from './migrations/index.js';
 
+export type { AccessTokenRecord, AuthSessionRecord } from './auth.js';
 export { encodeCursor, decodeCursor, InvalidCursorError, type Page } from './cursor.js';
-export {
-    applyPragmas,
-    assertForeignKeysOn,
-    openDatabase,
-    StorageError,
-    type Connection,
-    type Db,
-    type Sqlite,
-} from './db.js';
+export { applyPragmas, assertForeignKeysOn, openDatabase, StorageError, type Connection, type Sqlite } from './db.js';
 export { newId } from './ids.js';
 export {
     checksum,
@@ -27,7 +20,7 @@ export {
 } from './migrate.js';
 export { migrations } from './migrations/index.js';
 export { createRepositories, type AppendMessageInput, type PageRequest, type Repositories } from './repos.js';
-export * as schema from './schema.js';
+export { TABLE_COLUMNS, type TableName } from './schema.js';
 
 export interface OpenStorageOptions {
     /** 数据目录;数据库为 <dataDir>/db.sqlite,迁移前备份在 <dataDir>/backups/。 */
