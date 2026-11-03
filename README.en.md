@@ -39,6 +39,14 @@ Docker:
 docker compose -f docker/docker-compose.yml up --build
 ```
 
+On first start, create the owner account (1.0 has exactly one account):
+
+```bash
+curl -X POST http://127.0.0.1:8787/api/v1/auth/setup   -H 'content-type: application/json'   -d '{"username":"owner","password":"at least 12 characters"}'
+```
+
+Direct local requests need no setup code. From another machine or through a reverse proxy, add `"setupCode"` to the request; the code is printed in the server log on startup (`docker logs` in Docker).
+
 Please read [CONTRIBUTING.md](CONTRIBUTING.md) before contributing.
 
 ## License
