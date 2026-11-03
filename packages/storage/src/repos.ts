@@ -15,6 +15,7 @@ import type {
 } from '@ai-personal/shared';
 import { and, asc, desc, eq, gt, inArray, isNull, lt, lte, max, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import { createAuthRepositories } from './auth.js';
 import { decodeCursor, encodeCursor, type Page } from './cursor.js';
 import type { Connection } from './db.js';
 import { newId } from './ids.js';
@@ -426,7 +427,7 @@ export function createRepositories(conn: Connection, options: RepoOptions = {}) 
         },
     };
 
-    return { owners, sessions, messages, runs, events };
+    return { owners, sessions, messages, runs, events, ...createAuthRepositories(conn, now) };
 }
 
 export type Repositories = ReturnType<typeof createRepositories>;
