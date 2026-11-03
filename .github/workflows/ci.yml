@@ -75,6 +75,11 @@ jobs:
           RSS_KB=$(docker exec aip sh -c 'grep VmRSS /proc/1/status' | awk '{print $2}')
           echo "Idle RSS: $((RSS_KB / 1024)) MiB"
           test "$RSS_KB" -lt $((120 * 1024))
+      - name: Show container status and logs
+        if: failure()
+        run: |
+          docker ps -a --filter name=aip
+          docker logs aip || true
       - name: Remove container
         if: always()
         run: docker rm -f aip || true
