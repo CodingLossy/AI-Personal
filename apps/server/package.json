@@ -1,0 +1,26 @@
+{
+  "name": "@ai-personal/server",
+  "version": "0.0.0",
+  "private": true,
+  "description": "AI-Personal 核心服务(headless)",
+  "license": "AGPL-3.0-only",
+  "author": "尹绪柏 (Theodore Yin) <x19169738916@163.com>",
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ai-personal/shared": "workspace:*",
+    "@hono/node-server": "^2.1.6",
+    "hono": "^4.13.16"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.15"
+  }
+}
