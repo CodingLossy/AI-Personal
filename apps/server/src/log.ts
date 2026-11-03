@@ -1,27 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 尹绪柏 (Theodore Yin)
 
-type Level = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR' | 'FATAL';
-
-function timestamp(date = new Date()): string {
-    const pad = (n: number, width = 2) => String(n).padStart(width, '0');
-    return (
-        `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
-        `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${pad(date.getMilliseconds(), 3)}`
-    );
-}
+type Level = 'debug' | 'info' | 'warn' | 'error';
 
 /**
- * 格式化一行日志:`时间 [级别] [代码位置] {JSON 详情}`。
- * M0 的最小实现,M1 换成 pino 并保持同一格式;日志只写本地,永不外传。
+ * 输出一行 JSON 日志(与 pino 的字段约定一致,M1 换成 pino)。日志只写本地,永不外传。
  */
-export function formatLog(level: Level, position: string, detail: Record<string, unknown>, date?: Date): string {
-    return `${timestamp(date)} [${level}] [${position}] ${JSON.stringify(detail)}`;
+export function formatLog(level: Level, msg: string, fields: Record<string, unknown> = {}, date = new Date()): string {
+    return JSON.stringify({ time: date.toISOString(), level, msg, ...fields });
 }
 
-export function log(level: Level, position: string, detail: Record<string, unknown>): void {
-    const line = formatLog(level, position, detail);
-    if (level === 'ERROR' || level === 'FATAL') {
+export function log(level: Level, msg: string, fields?: Record<string, unknown>): void {
+    const line = formatLog(level, msg, fields);
+    if (level === 'error') {
         console.error(line);
     } else {
         console.log(line);

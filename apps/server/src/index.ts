@@ -10,11 +10,11 @@ const config = loadConfig();
 const app = createApp(config);
 
 const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
-    log('INFO', 'server/index.ts', { service: 'server', event: 'listening', host: info.address, port: info.port });
+    log('info', 'listening', { host: info.address, port: info.port });
 });
 
 function shutdown(signal: string): void {
-    log('INFO', 'server/index.ts', { service: 'server', event: 'shutdown', signal });
+    log('info', 'shutdown', { signal });
     server.close(() => process.exit(0));
 }
 
