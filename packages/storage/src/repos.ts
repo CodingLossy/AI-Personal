@@ -253,6 +253,13 @@ export function createRepositories(conn: Connection, options: RepoOptions = {}) 
         list: sqlite.prepare<[string, string, number, number], MessageRow>(
             `${messageSelect} WHERE owner_id = ? AND session_id = ? AND seq > ? ORDER BY seq LIMIT ?`,
         ),
+        before: sqlite.prepare<[string, string, number], MessageRow>(
+            `${messageSelect} WHERE owner_id = ? AND session_id = ? AND seq < ? ORDER BY seq`,
+        ),
+        hasChild: sqlite.prepare<[string], { n: number }>(
+            'SELECT count(*) AS n FROM messages WHERE parent_message_id = ?',
+        ),
+        interrupt: sqlite.prepare(`UPDATE messages SET status = 'error', updated_at = ? WHERE status = 'streaming'`),
     };
 
     /** 追加消息:seq 在同一事务内取「当前最大值 + 1」,并更新会话的 lastMessageAt。 */
@@ -307,6 +314,14 @@ export function createRepositories(conn: Connection, options: RepoOptions = {}) 
                 updatedAt: iso(),
             });
         },
+        /** 会话中 seq 小于 beforeSeq 的全部消息(组装模型上下文用),按 seq 升序。 */
+        listBefore(ownerId: string, sessionId: string, beforeSeq: number): Message[] {
+            return messageQ.before.all(ownerId, sessionId, beforeSeq).map(toMessage);
+        },
+        /** 是否已被重新生成的回复替代(有消息以它为 parentMessageId)。 */
+        isSuperseded(id: string): boolean {
+            return (messageQ.hasChild.get(id)?.n ?? 0) > 0;
+        },
         /** 按 seq 升序;游标为最后一项的 seq。 */
         list(ownerId: string, sessionId: string, page: PageRequest): Page<Message> {
             const after = page.cursor ? decodeCursor(page.cursor, seqCursor).s : 0;
@@ -337,6 +352,10 @@ export function createRepositories(conn: Connection, options: RepoOptions = {}) 
         active: sqlite.prepare<[string], RunRow>(
             `${runSelect} WHERE owner_id = ? AND finished_at IS NULL ORDER BY started_at`,
         ),
+        activeInSession: sqlite.prepare<[string, string], RunRow>(
+            `${runSelect} WHERE owner_id = ? AND session_id = ? AND finished_at IS NULL ORDER BY started_at DESC LIMIT 1`,
+        ),
+        unfinished: sqlite.prepare<[], RunRow>(`${runSelect} WHERE finished_at IS NULL ORDER BY started_at`),
     };
 
     const runs = {
@@ -368,6 +387,19 @@ export function createRepositories(conn: Connection, options: RepoOptions = {}) 
         },
         listActive(ownerId: string): Run[] {
             return runQ.active.all(ownerId).map(toRun);
+        },
+        activeInSession(ownerId: string, sessionId: string): Run | null {
+            const row = runQ.activeInSession.get(ownerId, sessionId);
+            return row ? toRun(row) : null;
+        },
+        /** 进程启动时未结束的运行(上次进程异常退出时遗留),含 ownerId 以便补发事件。 */
+        listUnfinished(): (Run & { ownerId: string })[] {
+            return runQ.unfinished.all().map((row) => ({ ...toRun(row), ownerId: row.ownerId }));
+        },
+        /** 运行的原始错误(JSON)。 */
+        error(id: string): unknown {
+            const row = runQ.byId.get(id);
+            return row?.errorJson ? (JSON.parse(row.errorJson) as unknown) : null;
         },
     };
 
@@ -435,6 +467,14 @@ export function createRepositories(conn: Connection, options: RepoOptions = {}) 
     };
 
     return {
+        /** 在一个事务中执行(better-sqlite3 同步事务)。 */
+        transaction<T>(fn: () => T): T {
+            return sqlite.transaction(fn)();
+        },
+        /** 把所有 streaming 状态的消息标为 error(进程启动时收尾)。 */
+        interruptStreamingMessages(): number {
+            return messageQ.interrupt.run(iso()).changes;
+        },
         owners,
         sessions,
         messages,
