@@ -1,73 +1,60 @@
-# 贡献指南 / Contributing
+# Contributing to AI-Personal
 
-感谢你愿意为 AI-Personal 做贡献!English summary at the bottom.
+Thank you for your interest in contributing! Source code and issues live at <https://github.com/CodingLossy/AI-Personal>.
 
-## 1. 先签 CLA
+## 1. Sign the CLA first
 
-AI-Personal 采用双许可(AGPL-3.0-only + 商业许可)。为了让作者能把你的贡献一并纳入商业许可,**所有外部贡献者都必须签署 [CLA](CLA.md)**。
+AI-Personal is dual-licensed (AGPL-3.0-only + a commercial license). So that the author can include your contribution in the commercial edition as well, **every external contributor must sign the [CLA](CLA.md)**.
 
-- 个人:首次提交 PR 时,CLA Assistant 会在 PR 中提示,按提示回复即可。
-- 代表公司贡献:请先让公司签署 CLA.md 第二部分(企业 CCLA),发送至 x19169738916@163.com。
+- Individuals: CLA Assistant asks you to sign on your first pull request; just reply as instructed.
+- Contributing on behalf of a company: have the company sign Part II of CLA.md (the Corporate CLA) and email it to x19169738916@163.com.
 
-未签 CLA 的 PR 无法合并。本项目**不使用** DCO 代替 CLA。
+Pull requests without a signed CLA cannot be merged. The project does **not** accept a DCO sign-off in place of the CLA.
 
-## 2. 开发环境
+## 2. Development setup
 
-- Node.js 24 LTS(最低 22.12),pnpm 10(`corepack enable`)
-- `pnpm install` 安装依赖,`pnpm dev` 同时启动核心服务(127.0.0.1:8787)与 Web UI(127.0.0.1:5173)
+- Node.js 24 LTS (minimum 22.12) and pnpm 10 (`corepack enable`)
+- `pnpm install` to install dependencies; `pnpm dev` starts the core server (127.0.0.1:8787) and the Web UI (127.0.0.1:5173)
 
-常用命令:
+| Command                                      | Purpose                                  |
+| -------------------------------------------- | ---------------------------------------- |
+| `pnpm dev`                                   | Run server + web in development mode     |
+| `pnpm build`                                 | Build all packages                       |
+| `pnpm lint` / `pnpm typecheck` / `pnpm test` | ESLint / type check / unit tests         |
+| `pnpm format`                                | Format with Prettier                     |
+| `pnpm check:spdx`                            | Check SPDX headers in source files       |
+| `pnpm check:licenses`                        | Check the dependency license allowlist   |
+| `pnpm check:placeholders`                    | Check for leftover template placeholders |
 
-| 命令                                         | 作用                           |
-| -------------------------------------------- | ------------------------------ |
-| `pnpm dev`                                   | 开发模式启动 server + web      |
-| `pnpm build`                                 | 构建全部包                     |
-| `pnpm lint` / `pnpm typecheck` / `pnpm test` | 代码检查 / 类型检查 / 单元测试 |
-| `pnpm format`                                | Prettier 格式化                |
-| `pnpm check:spdx`                            | 检查源文件 SPDX 头             |
-| `pnpm check:licenses`                        | 检查依赖许可证白名单           |
-| `pnpm check:placeholders`                    | 检查模板占位符残留             |
+## 3. Commits and pull requests
 
-## 3. 提交规范
+- Use [Conventional Commits](https://www.conventionalcommits.org/) **in English**: `feat(server): ...`, `fix(web): ...`, `docs: ...`, `chore: ...`.
+- Keep changes small: one feature per branch / PR. Describe the motivation, the changes and how you tested them; list open design questions under "Open questions".
+- Branch names: `feat/<topic>`, `fix/<topic>`, `docs/<topic>`.
+- Write an ADR in `docs/adr/` before changing schemas or the event protocol in `packages/shared`.
+- New tools need unit tests and at least one eval case; changes touching approvals or permissions need a privilege-escalation test case.
 
-- 使用 [Conventional Commits](https://www.conventionalcommits.org/):`feat(server): ...`、`fix(web): ...`、`docs: ...`、`chore: ...` 等;说明部分中英文均可。
-- 小步提交:一个功能点一个分支 / PR。PR 描述写清动机、改动、测试方式;不确定的设计取舍列在「待决定问题」中。
-- 分支命名:`feature-AI-Personal-<版本>` 或 `feature/<简述>`;紧急修复用 `hotfix-...`。
-- 改动 `packages/shared` 的 schema / 事件协议前,先在 `docs/adr/` 写 ADR。
-- 新工具必须附带单测与至少一条评测用例;涉及审批 / 权限的改动必须有越权用例。
+## 4. License headers
 
-## 4. 许可证头
-
-每个新建源文件开头必须有 SPDX 头(年份为首次创建年份):
+Every new source file starts with an SPDX header (the year is the year the file was created):
 
 ```ts
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 尹绪柏 (Theodore Yin)
 ```
 
-`packages/plugin-sdk`、`packages/client`、`packages/shared` 使用 `Apache-2.0`。YAML / Shell / Dockerfile 用 `#`,CSS 用 `/* */`,HTML 用 `<!-- -->`。模板见 [templates/FILE-HEADER.txt](templates/FILE-HEADER.txt)。外部贡献者无需在文件头署名,版权由 CLA 覆盖并记录在 git 历史中。
+`packages/plugin-sdk`, `packages/client` and `packages/shared` use `Apache-2.0`. YAML / shell / Dockerfile use `#`, CSS uses `/* */`, HTML uses `<!-- -->`. See [templates/FILE-HEADER.txt](templates/FILE-HEADER.txt). External contributors do not add their names to file headers; their copyright is covered by the CLA and recorded in git history.
 
-## 5. 依赖许可证白名单
+## 5. Dependency license allowlist
 
-只允许宽松许可的依赖:MIT、BSD-2-Clause、BSD-3-Clause、ISC、Apache-2.0、0BSD、Unlicense、CC0-1.0、BlueOak-1.0.0、Python-2.0,以及**仅以未修改库形式使用**的 MPL-2.0。
+Only permissively licensed dependencies are allowed: MIT, BSD-2-Clause, BSD-3-Clause, ISC, Apache-2.0, 0BSD, Unlicense, CC0-1.0, BlueOak-1.0.0, Python-2.0, and MPL-2.0 **only when used as an unmodified library**.
 
-**禁止**任何第三方 copyleft 依赖(GPL、LGPL、AGPL、SSPL、EUPL、CDDL 等),否则商业许可版无法合法发布。CI 中的 `pnpm check:licenses` 会强制检查。
+Third-party copyleft dependencies (GPL, LGPL, AGPL, SSPL, EUPL, CDDL, …) are **forbidden**, because they would make the commercial edition impossible to distribute. `pnpm check:licenses` enforces this in CI.
 
-同样禁止:遥测 / 崩溃上报 SDK(Sentry、PostHog、Segment 等)、需要额外常驻服务的依赖、来源或许可不明的代码片段。AI 生成的代码按项目许可提交,请在 PR 中注明。
+Also forbidden: telemetry or crash-reporting SDKs (Sentry, PostHog, Segment, …), dependencies that require an extra always-on service, and code snippets of unknown origin or license. AI-generated code is submitted under the project license; please disclose it in your PR.
 
-## 6. 安全问题
+## 6. Security issues
 
-请不要在公开 Issue 中报告漏洞,见 [SECURITY.md](SECURITY.md)。
-
----
-
-## English Summary
-
-1. **Sign the [CLA](CLA.md)** — required for every external contributor (CLA Assistant prompts you on your first PR; companies sign the CCLA in Part II). DCO alone is not accepted.
-2. **Setup:** Node.js 24 LTS (≥ 22.12), pnpm 10; `pnpm install && pnpm dev`.
-3. **Commits:** Conventional Commits, small focused PRs with motivation, changes and test plan. Write an ADR before changing `packages/shared` contracts.
-4. **License headers:** every source file starts with `SPDX-License-Identifier: AGPL-3.0-only` and `Copyright (C) 2026 尹绪柏 (Theodore Yin)`; `plugin-sdk`, `client` and `shared` use `Apache-2.0`.
-5. **Dependencies:** permissive licenses only (MIT, BSD, ISC, Apache-2.0, 0BSD, Unlicense, …; MPL-2.0 unmodified only). No third-party copyleft, no telemetry SDKs.
-6. **Security issues:** see [SECURITY.md](SECURITY.md).
+Please do not report vulnerabilities in public issues; see [SECURITY.md](SECURITY.md).
 
 Copyright (C) 2026 尹绪柏 (Theodore Yin)

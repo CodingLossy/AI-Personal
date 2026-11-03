@@ -1,6 +1,6 @@
 # AI-Personal
 
-[中文](README.md)
+[中文](README.md) · Source: <https://github.com/CodingLossy/AI-Personal> · Issues: <https://github.com/CodingLossy/AI-Personal/issues>
 
 An AI assistant that is truly your own: self-hostable, open source, bring-your-own-model (BYO LLM), local-first, **telemetry-free**, and pluggable (MCP is a first-class citizen).
 
@@ -24,6 +24,8 @@ AI-Personal contains **no** analytics or crash-reporting code. It only connects 
 Requires Node.js 24 LTS (minimum 22.12) and pnpm 10.
 
 ```bash
+git clone https://github.com/CodingLossy/AI-Personal.git
+cd AI-Personal
 pnpm install
 pnpm dev
 ```

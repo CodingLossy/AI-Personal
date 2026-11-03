@@ -13,6 +13,9 @@ including affected versions, reproduction steps, impact, and any suggested fix.
 We aim to acknowledge reports within 5 business days and will credit reporters
 (if desired) once a fix is released.
 
+也可以使用 GitHub 的私密漏洞报告 / You may also use GitHub private vulnerability reporting:
+<https://github.com/CodingLossy/AI-Personal/security/advisories/new>
+
 ## 支持的版本 / Supported Versions
 
 仅最新的次版本(minor)接收安全更新。Only the latest minor release receives security fixes.

@@ -1,6 +1,6 @@
 # 商标政策 / Trademark Policy
 
-「AI-Personal」名称及其 Logo(以下统称「标识」)是尹绪柏 (Theodore Yin) 的商标。AI-Personal 的源代码以 GNU AGPL-3.0-only 授权,但**该许可不授予任何商标权利**(见 AGPL-3.0 第 7 条)。本政策说明在哪些情况下可以使用这些标识。
+「AI-Personal」名称及其 Logo(以下统称「标识」)是尹绪柏 (Theodore Yin) 的商标。官方项目地址:<https://github.com/CodingLossy/AI-Personal>。AI-Personal 的源代码以 GNU AGPL-3.0-only 授权,但**该许可不授予任何商标权利**(见 AGPL-3.0 第 7 条)。本政策说明在哪些情况下可以使用这些标识。
 
 ## 无需许可即可使用
 
@@ -29,7 +29,7 @@
 
 ## English
 
-"AI-Personal" and its logo (the "Marks") are trademarks of 尹绪柏 (Theodore Yin). The source code is licensed under the GNU AGPL-3.0-only, but **that license grants no trademark rights** (see AGPL-3.0 section 7).
+"AI-Personal" and its logo (the "Marks") are trademarks of 尹绪柏 (Theodore Yin). Official project: <https://github.com/CodingLossy/AI-Personal>. The source code is licensed under the GNU AGPL-3.0-only, but **that license grants no trademark rights** (see AGPL-3.0 section 7).
 
 **Allowed without permission:** truthfully referring to the Project (articles, tutorials, talks, reviews); stating compatibility ("a plugin for AI-Personal") without implying endorsement; redistributing unmodified official releases under their original name; personal or internal use that is not offered to third parties under the AI-Personal name.
 

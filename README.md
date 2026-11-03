@@ -1,6 +1,6 @@
 # AI-Personal
 
-[English](README.en.md)
+[English](README.en.md) · 源码:<https://github.com/CodingLossy/AI-Personal> · 问题反馈:<https://github.com/CodingLossy/AI-Personal/issues>
 
 一个真正属于你自己的 AI 助手:可自托管、开源、自带模型(BYO LLM)、本地优先、**零遥测**、插件化(MCP 为一等公民)。
 
@@ -24,6 +24,8 @@ AI-Personal **不包含任何**统计或崩溃上报代码。程序只会连接�
 需要 Node.js 24 LTS(最低 22.12)与 pnpm 10。
 
 ```bash
+git clone https://github.com/CodingLossy/AI-Personal.git
+cd AI-Personal
 pnpm install
 pnpm dev
 ```
