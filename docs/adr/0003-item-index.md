@@ -27,8 +27,8 @@ CREATE TABLE items (
   created_at TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT
 );
 CREATE TABLE item_edges (
-  parent_id TEXT NOT NULL,
-  child_id  TEXT NOT NULL,
+  parent_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+  child_id  TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
   rel TEXT NOT NULL DEFAULT 'contains',   -- 'contains' 构成导航树;'mentions' / 'derived' 为交叉链接
   position INTEGER,
   primary_edge INTEGER NOT NULL DEFAULT 0, -- 每个条目恰有一条 primary 'contains' 边(顶层类别除外)
@@ -38,7 +38,8 @@ CREATE INDEX idx_edges_child ON item_edges(child_id);
 CREATE INDEX idx_items_type ON items(owner_id, type, updated_at);
 ```
 
-计划 6.2 的草图中 `item_edges` 使用了外键 + `ON DELETE CASCADE`。业主的全局开发规范禁止外键与级联、要求在应用层维护引用一致性,因此这里**不建外键**:删除条目时,由 `packages/items` 在同一事务内删除相关边,并沿祖先链更新计数。是否允许在 SQLite 中使用外键,列为待业主确认的问题;实现时以本 ADR 为准。
+- **外键**:`item_edges` 两端引用 `items(id)` 并 `ON DELETE CASCADE`,与计划 6.2 一致。SQLite 默认不执行外键约束,因此每个数据库连接打开后必须执行 `PRAGMA foreign_keys = ON`(由 M1 的存储模块统一处理,并有测试覆盖:删除条目后其边被级联删除)。
+- 硬删除条目时,边由数据库级联删除;祖先链上的 `child_count` / `descendant_count` 仍需在同一事务内由 `packages/items` 更新。日常删除优先使用 `deleted_at` 软删除。
 
 ### 规则
 

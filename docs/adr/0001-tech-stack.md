@@ -28,10 +28,11 @@ AI-Personal 需要同时满足:可在 2GB 内存服务器常驻、桌面安装�
 
 - **TypeScript 6.0 而非 7.0**:7.0(原生实现)已发布,但 typescript-eslint 8.x 的 peer 依赖仍为 `<6.1.0`。等其支持 7.x 后再升级。
 - **ESLint 10 flat config**(`eslint.config.js`)+ typescript-eslint recommended;React 相关包额外启用 react-hooks 规则。
-- **Prettier**:4 空格缩进、120 列、单引号、LF(与业主全局开发规范一致);JSON / YAML / Markdown 用 2 空格。
+- **Prettier**:4 空格缩进、120 列、单引号、LF;JSON / YAML / Markdown 用 2 空格。
 - **包构建**:每个包用 `tsc` 输出到 `dist/`,`exports` 指向 `dist`;Turborepo 的 `build` / `typecheck` / `test` / `dev` 均依赖上游包先 `build`。
 - **server 开发模式**:`node --watch --import tsx src/index.ts`。`tsx watch` 在 turbo 的子进程中无法启动,已弃用。
 - **Docker**:`node:24-slim` 多阶段构建,`pnpm deploy --prod --legacy` 产出 server 生产依赖,运行时以 `node` 用户运行,`--max-old-space-size=384`。
+- **SQLite**(M1 起):每个连接打开后执行 `PRAGMA foreign_keys = ON`,使 ADR 0003 中的外键与 `ON DELETE CASCADE` 生效。
 - 核心默认只监听 `127.0.0.1:8787`,Docker 内监听 `0.0.0.0`,compose 只映射到宿主机 `127.0.0.1`。
 
 ## 后果

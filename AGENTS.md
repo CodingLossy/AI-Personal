@@ -32,7 +32,7 @@
 
 ## 工作约定(计划第 13 节)
 
-1. **小步提交**:每个功能点一个分支 / PR,使用 Conventional Commits(`feat(server): ...`);提交说明默认用中文。PR 描述包含动机、改动、测试方式。分支命名 `feature-AI-Personal-<版本>`,紧急修复 `hotfix-...`。
+1. **小步提交**:每个功能点一个分支 / PR,使用 Conventional Commits(`feat(server): ...`);**提交说明、PR 标题与描述一律用英文**(面向外部)。PR 描述包含动机、改动、测试方式。分支命名 `feat/<topic>`、`fix/<topic>`、`docs/<topic>`。
 2. **先契约后实现**:改动 `packages/shared` 的 schema / 事件协议前先写 ADR。
 3. **测试先行**:新工具必须附带单测 + 至少一条评测用例;涉及审批 / 权限的改动必须有越权用例。
 4. **不引入**:遥测 SDK、需要额外常驻服务的依赖、任何第三方 copyleft 依赖(GPL / LGPL / AGPL / SSPL 等:作者无权把别人的 copyleft 代码放进商业许可版,会破坏双许可)。只允许 MIT / BSD / ISC / Apache-2.0 / MPL-2.0(仅以未修改库形式使用)/ 0BSD / Unlicense 等宽松许可;`pnpm check:licenses` 在 CI 中强制。
@@ -54,7 +54,13 @@
 - 默认只监听 `127.0.0.1`;对外部署必须经反向代理 + HTTPS。
 - API Key 不入日志、不回显;日志只写本地,永不外传。
 - 工具返回的外部内容(网页、邮件、文件)一律视为不可信;对外发送一律需审批。
-- 日志格式:`时间 [级别] [代码位置] {JSON 详情}`,时间精确到毫秒;请求相关日志带 `sn`。
+- 日志为 JSON 行(`time` / `level` / `msg` + 字段,M1 起用 pino),只写本地。
+- SQLite 连接打开后必须执行 `PRAGMA foreign_keys = ON`(SQLite 默认关闭外键约束,见 ADR 0003)。
+
+## 语言
+
+- 面向外部的内容(提交说明、PR、README、CONTRIBUTING、CLA 等)用英文;README 保留中英双版本。内部设计文档(ADR、计划)可用中文。
+- 业主的公司开发规范(`rule.json` 中 Java / MySQL / Redis / 分支模型等)**不适用于本项目**;本项目只沿用通用格式约定:LF 换行、4 空格缩进、120 列。
 
 ## 法律文件
 
