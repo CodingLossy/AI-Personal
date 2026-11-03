@@ -41,7 +41,7 @@ Web UI、CLI、IM 渠道以及以后的桌面 / 移动客户端都只能通过�
 - 运行中产生的每个事件都持久化,并带**全局单调递增的 `seq`**(按 owner 计)。事件信封:`{ seq, at, sessionId, event }`,`event` 为 `AgentEvent`。
 - **SSE**:`POST /api/v1/sessions/:id/messages` 默认直接返回 `text/event-stream`;`GET /api/v1/runs/:runId/events` 用于续看,先补发 `Last-Event-ID`(或 `?after=<seq>`)之后的事件,运行未结束时继续推送。帧格式:`id: <seq>`、`event: agent`、`data: <EventEnvelope JSON>`;每 15 秒发一行 `: ping` 注释作心跳,并设置 `X-Accel-Buffering: no`。运行结束(`run-finished` / `run-failed`)后服务器关闭流。
 - **WebSocket**:帧 `{ v: 1, type, id, seq?, payload }`;客户端 `hello` 时带 `protocolVersion` 与 `lastSeq`,服务器先补发 `lastSeq` 之后的事件,再推送实时事件;30 秒 ping / pong。SSE 与 WebSocket 使用同一个 `seq`,可以互相补发。
-- 补发窗口默认 24 小时;超出窗口的文本增量事件会被合并(助手消息正文已完整保存在消息表中),客户端此时应改为读取消息列表。
+- 补发窗口默认 24 小时;超出窗口的运行,其文本增量事件会被删除(助手消息正文已完整保存在消息表中),客户端此时应改为读取消息列表。
 
 ### 6. 幂等
 

@@ -14,7 +14,9 @@ server、memory、items 以及以后的渠道、任务都要使用同一个 SQLi
 
 - 负责:打开连接、执行迁移、在线备份、Drizzle 表定义与各领域的仓储(repository)。其他包只依赖它导出的类型化接口,不自己打开数据库。
 - 驱动:`better-sqlite3`(同步 API;单进程单写连接,个人规模足够)。Node 内置的 `node:sqlite` 稳定后可替换(另写 ADR)。
-- ORM:`drizzle-orm`;迁移 SQL 由 `drizzle-kit generate` 生成并提交到 `packages/storage/migrations/`,**运行时不生成迁移**。
+- ORM:`drizzle-orm`,只用作类型化查询;表定义在 `src/schema.ts`。
+- 迁移:**手写 SQL**,放在 `src/migrations/NNNN_name.ts`(随包编译,不需要额外拷贝文件),由自写的迁移器执行。不用 `drizzle-kit generate`:它无法表达 FTS5 虚拟表、触发器、部分唯一索引和 CHECK 约束,而这些是本项目结构的核心。Drizzle 表定义与迁移结果的一致性由单测(列名逐表比对)保证。
+- 每条已执行的迁移在 `schema_migrations` 中记录 SHA-256 校验和;启动时发现已执行的迁移被修改,或库中有本版本不认识的迁移,一律拒绝启动。
 
 ### 2. 连接参数
 
@@ -50,7 +52,7 @@ server、memory、items 以及以后的渠道、任务都要使用同一个 SQLi
 
 ### 6. 事件表体积
 
-运行结束且超过补发窗口(默认 24 小时)后,把该运行的 `text-delta` 事件合并为一条摘要事件(正文已完整保存在 `messages`),只保留结构性事件。
+运行结束且超过补发窗口(默认 24 小时)后,删除该运行的 `text-delta` 事件(正文已完整保存在 `messages`),只保留结构性事件。不另造「合并后」的事件类型,以免客户端补发时遇到 v1 契约之外的事件。
 
 ## 后果
 
