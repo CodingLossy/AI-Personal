@@ -6,7 +6,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Writable } from 'node:stream';
-import { Redactor, SecretStore } from '@ai-personal/providers';
+import { EventBus, RunManager } from '@ai-personal/agent';
+import { createProvider, type ModelProvider, Redactor, SecretStore } from '@ai-personal/providers';
 import { createRepositories, openStorage, type Repositories } from '@ai-personal/storage';
 import { createApp, type AppDeps } from './app.js';
 import { FailureLimiter } from './auth/rate-limit.js';
@@ -17,11 +18,13 @@ export const TEST_SETUP_CODE = 'setup-code-123456';
 
 export interface TestServer {
     app: ReturnType<typeof createApp>;
+    bus: EventBus;
+    runs: RunManager;
     dir: string;
     repos: Repositories;
     /** 本测试期间写出的全部日志行。 */
     logs: string[];
-    cleanup(): void;
+    cleanup(): Promise<void>;
 }
 
 /**
@@ -32,6 +35,8 @@ export interface TestServerOptions {
     fetch?: typeof fetch;
     /** SecretStore 读取的环境变量。 */
     env?: NodeJS.ProcessEnv;
+    /** 替换模型 provider(对话运行测试用)。 */
+    provider?: ModelProvider;
 }
 
 export async function createTestServer(
@@ -50,6 +55,19 @@ export async function createTestServer(
     });
     const redactor = new Redactor();
     const secrets = new SecretStore({ dataDir: dir, redactor, env: options.env ?? {} });
+    const providerDeps = {
+        secrets,
+        redactor,
+        sleep: () => Promise.resolve(),
+        ...(options.fetch ? { fetch: options.fetch } : {}),
+    };
+    const bus = new EventBus();
+    const runs = new RunManager({
+        repos,
+        bus,
+        persistIntervalMs: 0,
+        providerFor: (profile) => options.provider ?? createProvider(profile, providerDeps),
+    });
     const app = createApp({
         config: {
             sourceUrl: 'https://github.com/CodingLossy/AI-Personal',
@@ -61,21 +79,21 @@ export async function createTestServer(
         repos,
         logger: createLogger({ level: 'debug', destination, redactLine: (l) => redactor.redact(l) }),
         secrets,
-        providerDeps: {
-            secrets,
-            redactor,
-            sleep: () => Promise.resolve(),
-            ...(options.fetch ? { fetch: options.fetch } : {}),
-        },
+        providerDeps,
+        bus,
+        runs,
         clientIp: (c) => c.req.header('x-test-ip') ?? '127.0.0.1',
         loginLimiter: new FailureLimiter(5, 60_000),
     });
     return {
         app,
+        bus,
+        runs,
         dir,
         repos,
         logs,
-        cleanup() {
+        async cleanup() {
+            await runs.idle();
             conn.close();
             rmSync(dir, { recursive: true, force: true });
         },

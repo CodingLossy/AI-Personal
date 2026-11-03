@@ -2,13 +2,16 @@
 // Copyright (C) 2026 尹绪柏 (Theodore Yin)
 
 import { mkdirSync } from 'node:fs';
+import type { Server } from 'node:http';
 import { serve } from '@hono/node-server';
-import { Redactor, SecretStore } from '@ai-personal/providers';
+import { EventBus, RunManager } from '@ai-personal/agent';
+import { createProvider, Redactor, SecretStore } from '@ai-personal/providers';
 import { createRepositories, openStorage } from '@ai-personal/storage';
 import { createApp } from './app.js';
 import { randomToken } from './auth/crypto.js';
 import { loadConfig } from './config.js';
 import { createLogger } from './log.js';
+import { attachWebSocket } from './ws.js';
 
 const config = loadConfig();
 // 脱敏器登记本进程加载过的模型密钥;日志每一行写出前都经过它(ADR 0006)
@@ -35,20 +38,27 @@ if (repos.owners.count() === 0) {
     }
 }
 
-const app = createApp({
-    config: { ...config, setupCode },
+const providerDeps = { secrets, redactor };
+const bus = new EventBus();
+const runs = new RunManager({
     repos,
-    logger,
-    secrets,
-    providerDeps: { secrets, redactor },
+    bus,
+    providerFor: (profile) => createProvider(profile, providerDeps),
+    onError: (err, { runId }) => logger.error({ err, runId }, 'run failed unexpectedly'),
 });
+const interrupted = runs.recoverInterrupted();
+if (interrupted > 0) logger.warn({ count: interrupted }, 'marked runs interrupted by the previous shutdown as failed');
+
+const app = createApp({ config: { ...config, setupCode }, repos, logger, secrets, providerDeps, bus, runs });
 
 const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
     logger.info({ host: info.address, port: info.port, dataDir: config.dataDir }, 'listening');
-});
+}) as Server;
+const websockets = attachWebSocket(server, { repos, bus, logger });
 
 function shutdown(signal: string): void {
     logger.info({ signal }, 'shutdown');
+    websockets.close();
     server.close(() => {
         conn.close();
         process.exit(0);

@@ -43,6 +43,11 @@ Web UI、CLI、IM 渠道以及以后的桌面 / 移动客户端都只能通过�
 - 运行中产生的每个事件都持久化,并带**全局单调递增的 `seq`**(按 owner 计)。事件信封:`{ seq, at, sessionId, event }`,`event` 为 `AgentEvent`。
 - **SSE**:`POST /api/v1/sessions/:id/messages` 默认直接返回 `text/event-stream`;`GET /api/v1/runs/:runId/events` 用于续看,先补发 `Last-Event-ID`(或 `?after=<seq>`)之后的事件,运行未结束时继续推送。帧格式:`id: <seq>`、`event: agent`、`data: <EventEnvelope JSON>`;每 15 秒发一行 `: ping` 注释作心跳,并设置 `X-Accel-Buffering: no`。运行结束(`run-finished` / `run-failed`)后服务器关闭流。
 - **WebSocket**:帧 `{ v: 1, type, id, seq?, payload }`;客户端 `hello` 时带 `protocolVersion` 与 `lastSeq`,服务器先补发 `lastSeq` 之后的事件,再推送实时事件;30 秒 ping / pong。SSE 与 WebSocket 使用同一个 `seq`,可以互相补发。
+  - 实现(PR #5):服务器先订阅事件总线并缓存,再从库中补发,最后转为实时推送,保证不重不漏;不带 `lastSeq` 时只推送之后的实时事件。
+  - 握手鉴权:`Authorization: Bearer aip_pat_…`,或会话 Cookie;Cookie 鉴权还要求 `Origin` 与 `Host` 一致(防止跨站 WebSocket 劫持)。令牌不放在 URL 中。失败时在握手阶段返回 401 / 403。
+  - 关闭码:4400 帧非法或重复 hello,4406 协议版本不支持,4408 10 秒内没有 hello,1013 客户端读取太慢(缓冲超过 4 MB)。单帧上限 64 KB。
+  - `ws` 库在第一次握手时才加载(独立测量 import 约 +10 MiB RSS),不使用 WebSocket 的部署不承担这部分内存。
+- **运行规则**:同一会话同时只允许一个运行,否则 409 `conflict`。重新生成与重试沿用原来的用户消息,新的助手消息以 `parentMessageId` 指向被替代的回复;组装上下文时跳过被替代的回复。服务启动时,把上次异常退出遗留的运行标为失败并补发 `run-failed`。
 - 补发窗口默认 24 小时;超出窗口的运行,其文本增量事件会被删除(助手消息正文已完整保存在消息表中),客户端此时应改为读取消息列表。
 
 ### 6. 幂等

@@ -8,7 +8,7 @@
 
 ## 特性(规划中)
 
-- **BYO LLM**:任何 OpenAI 兼容端点(含 Ollama / LM Studio / vLLM),另支持 Anthropic / Gemini 原生接口
+- **BYO LLM**:任何 OpenAI 兼容端点(含 Ollama / LM Studio / vLLM),另支持 Anthropic / Gemini 原生接口。已确认可用的端点:DeepSeek(`https://api.deepseek.com/v1`)、OpenRouter(`https://openrouter.ai/api/v1`)
 - **Headless 核心**:所有能力都通过版本化的 `/api/v1` HTTP + WebSocket API 提供,Web UI、CLI、IM 渠道都是它的客户端
 - **本地文件、邮件、语音、定时任务**,工具按风险分级,危险操作默认需人工确认
 - **渠道**:1.0 支持企业微信与微信

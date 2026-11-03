@@ -475,6 +475,7 @@ ai-personal models test ollama-qwen
 | 6   | Anthropic / Gemini | 放最后一个 PR,进度紧可移到 M1.x                                                                                                                                                                           |
 | 7   | openapi.json       | 需要鉴权;CI 另导出静态文件                                                                                                                                                                                |
 | 8   | 手工验收端点       | DeepSeek:`https://api.deepseek.com/v1`,模型 `deepseek-chat`,密钥 `env:DEEPSEEK_API_KEY`;2026-11-03 已录制真实 fixture(`packages/providers/test/fixtures/deepseek-*.json`),录制时 key 不写入任何文件或日志 |
+| 8a  | 已确认可用的端点   | DeepSeek(`https://api.deepseek.com/v1`,已录制 fixture)、OpenRouter(`https://openrouter.ai/api/v1`,业主 2026-11-03 确认可用);均按 `openai-compatible` 配置,密钥用 `env:` / `file:` 引用                    |
 | 9   | 提交流程           | 每个 PR 一个 `feat/` 或 `docs/` 分支,业主审阅后合并,按第 8 节顺序                                                                                                                                         |
 
 <details><summary>原问题(存档)</summary>
