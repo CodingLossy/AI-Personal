@@ -82,6 +82,18 @@ jobs:
           RSS_KB=$(docker exec aip sh -c 'grep VmRSS /proc/1/status' | awk '{print $2}')
           echo "Idle RSS: $((RSS_KB / 1024)) MiB"
           test "$RSS_KB" -lt $((120 * 1024))
+      - name: Memory breakdown (informational)
+        run: |
+          docker run --rm ai-personal:ci node --input-type=module -e "
+          const mb = () => Math.round(process.memoryUsage().rss / 1048576);
+          const heap = () => Math.round(process.memoryUsage().heapUsed / 1048576);
+          const row = (label) => console.log(label.padEnd(22), 'rss', String(mb()).padStart(4), 'MiB  heap', String(heap()).padStart(4), 'MiB');
+          row('node baseline');
+          for (const m of ['better-sqlite3', '@ai-personal/storage', 'pino', 'hono', '@hono/node-server', '@hono/zod-openapi', './dist/app.js']) {
+            await import(m);
+            row('+ ' + m);
+          }
+          "
       - name: Show container status and logs
         if: failure()
         run: |
