@@ -26,6 +26,7 @@
 - `apps/server` 核心服务(Hono);`apps/web` React Web UI;`apps/cli`、`apps/docs`、`apps/desktop` 为后续里程碑预留。
 - `packages/shared` 协议 schema 与类型(zod,**Apache-2.0**);`packages/plugin-sdk`、`packages/client` 为 **Apache-2.0** SDK;其余包为 AGPL-3.0-only。
 - `packages/items` 统一条目索引(知识地图数据层,见 `docs/adr/0003-item-index.md`)。
+- `packages/storage` 唯一的数据库入口:SQLite 连接、迁移与备份、表定义与仓储(见 `docs/adr/0005-storage.md`)。其他包不得自己打开数据库。
 - 设计记录放 `docs/adr/NNNN-标题.md`;模板文件放 `templates/`(不参与构建)。
 - 包名统一 `@ai-personal/*`,ESM only(`"type": "module"`),相对导入写 `.js` 后缀。
 - 代码风格:Prettier(4 空格缩进、120 列、单引号、LF);TS strict + `noUncheckedIndexedAccess`。
@@ -48,6 +49,10 @@
 6. **API 稳定性**:`/api/v1` 与 WebSocket 协议 v1 发布后只做向后兼容的增量修改;破坏性修改必须走 `/api/v2` 并写 ADR。Web UI 只能使用公开 API,禁止内部捷径。
 7. **不确定时**:选择更简单、更安全(默认拒绝 / 默认需审批)的方案,并在 PR 中列出待业主决定的问题。**不要推翻第 16 节已定决策**:AGPL-3.0-only + 商业许可 + CLA;SDK 与 shared 为 Apache-2.0;1.0 只做企业微信 + 微信(QQ 以后);1.0 仅单用户(表结构预留 `ownerId`);不做付费代码签名;知识地图 1.0 为列表 / 树形浏览器,粒子球导航在 M10。
 8. **文档同步**:用户可见的变化同步更新文档站与 CHANGELOG;中英文都要更新(英文可先由模型翻译,标注待校对)。
+
+## 净室实现(记忆模块等)
+
+《记忆模块补充设计》借鉴了 GPL / AGPL 及许可证未核实的项目思想(见 `docs/adr/0007-memory-v2.md` 第 0 节)。实现时**只依据 `docs/plan/` 与 ADR 中我们自己写的规格**:不打开、不搜索、不复制这些项目的代码、SQL、提示词、测试数据、文案或配置,也不把它们加为依赖。
 
 ## 安全与隐私底线
 

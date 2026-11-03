@@ -13,3 +13,4 @@
 - [ ] 未引入 copyleft 或遥测依赖 / No copyleft or telemetry dependencies
 - [ ] 涉及 `packages/shared` 契约的改动已写 ADR / ADR written for `packages/shared` contract changes
 - [ ] AI 生成的代码已注明 / AI-generated code is disclosed
+- [ ] 未参考第三方源码,仅依据 docs/plan 与 ADR 的规格(净室,见 ADR 0007)/ No third-party source consulted; implemented from docs/plan and ADR specs only (clean room, see ADR 0007)
