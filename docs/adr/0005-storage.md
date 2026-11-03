@@ -12,10 +12,10 @@ server、memory、items 以及以后的渠道、任务都要使用同一个 SQLi
 
 ### 1. 新增 `packages/storage`(AGPL-3.0-only)
 
-- 负责:打开连接、执行迁移、在线备份、Drizzle 表定义与各领域的仓储(repository)。其他包只依赖它导出的类型化接口,不自己打开数据库。
+- 负责:打开连接、执行迁移、在线备份、表的列清单与各领域的仓储(repository)。其他包只依赖它导出的类型化接口,不自己打开数据库。
 - 驱动:`better-sqlite3`(同步 API;单进程单写连接,个人规模足够)。Node 内置的 `node:sqlite` 稳定后可替换(另写 ADR)。
-- ORM:`drizzle-orm`,只用作类型化查询;表定义在 `src/schema.ts`。
-- 迁移:**手写 SQL**,放在 `src/migrations/NNNN_name.ts`(随包编译,不需要额外拷贝文件),由自写的迁移器执行。不用 `drizzle-kit generate`:它无法表达 FTS5 虚拟表、触发器、部分唯一索引和 CHECK 约束,而这些是本项目结构的核心。Drizzle 表定义与迁移结果的一致性由单测(列名逐表比对)保证。
+- **不使用 ORM**:仓储直接用 better-sqlite3 的预编译语句(全部参数绑定),行类型与列清单写在 `src/schema.ts`。最初选用的 `drizzle-orm` 0.45 仅 `import` 就占用约 140MB 堆内存(本机与 CI 实测,容器空闲 RSS 从 81MB 升到 209MB),超出 2GB 机器的预算与 M0 的 120MB 门禁,已在 PR #3 中移除。
+- 迁移:**手写 SQL**,放在 `src/migrations/NNNN_name.ts`(随包编译,不需要额外拷贝文件),由自写的迁移器执行。不用 `drizzle-kit generate`:它无法表达 FTS5 虚拟表、触发器、部分唯一索引和 CHECK 约束,而这些是本项目结构的核心。`src/schema.ts` 的列清单与迁移结果的一致性由单测(列名逐表比对)保证。
 - 每条已执行的迁移在 `schema_migrations` 中记录 SHA-256 校验和;启动时发现已执行的迁移被修改,或库中有本版本不认识的迁移,一律拒绝启动。
 
 ### 2. 连接参数

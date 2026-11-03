@@ -137,7 +137,7 @@
 | HTTP/WS 服务 | Hono(@hono/node-server)| 轻量;SSE 流式 + WebSocket |
 | LLM 层 | Vercel AI SDK 7(`ai` + `@ai-sdk/openai-compatible` / `@ai-sdk/anthropic` / `@ai-sdk/google`)| 自封一层 `ModelProvider` 接口,避免强绑定 |
 | MCP | `@modelcontextprotocol/sdk`(客户端 + 自身也暴露 MCP Server)| stdio + Streamable HTTP |
-| 存储 | SQLite(better-sqlite3)+ Drizzle ORM + sqlite-vec(向量)| 单文件,备份简单;Node 内置 `node:sqlite` 转稳定后可替换 |
+| 存储 | SQLite(better-sqlite3,手写参数化 SQL + 自写迁移器)+ sqlite-vec(向量)| 单文件,备份简单;不用 ORM:drizzle-orm 0.45 仅加载就占约 140MB 堆(ADR 0005);Node 内置 `node:sqlite` 转稳定后可替换 |
 | 任务调度 | 自研轻量调度器(cron 表达式用 `croner`)+ SQLite 持久化 | |
 | Web UI | React 19 + Vite + TanStack Router/Query + Tailwind + shadcn/ui | |
 | 桌面 | Tauri v2(Rust)+ sidecar(Node SEA / 附带 node)| 托盘、快捷键、自动更新、深链接 |
@@ -307,7 +307,7 @@ core 必须能在**没有任何 UI** 的情况下完整运行(`ai-personal serve
 
 ### 6.2 知识地图:统一条目表 + 父子关系表 + 层级查询 API
 
-**数据模型(SQLite + Drizzle,M2 落地)**
+**数据模型(SQLite,手写 SQL 迁移;M1 建表,M2 落地 API)**
 ```sql
 CREATE TABLE items (
   id TEXT PRIMARY KEY,            -- ULID
@@ -387,7 +387,7 @@ CREATE INDEX idx_items_type ON items(owner_id, type, updated_at);
 ### M1 · 对话核心 + BYO LLM(约 1 周)
 - 模型配置档 CRUD(只能填 `env:` / `file:` 密钥引用),连接测试按钮(调 `/models` 或发一次最小请求);OpenAI 兼容 / Anthropic / Gemini 适配(后两者为最后一个 PR,进度紧可移到 M1.x)。
 - `packages/storage`:SQLite 连接(每个连接 `PRAGMA foreign_keys = ON`)、迁移与备份(ADR 0005)。
-- 会话与消息存储(SQLite + Drizzle 迁移);流式输出(SSE);中断/重试/重新生成;上下文窗口管理(超长时用 cheap 模型做摘要压缩)。
+- 会话与消息存储(SQLite + 手写 SQL 迁移,`packages/storage`);流式输出(SSE);中断/重试/重新生成;上下文窗口管理(超长时用 cheap 模型做摘要压缩)。
 - Web UI:会话列表、聊天窗口(Markdown、代码高亮、复制)、设置页、深浅色、中英文切换骨架。
 - 鉴权:主人账户初始化(1.0 单用户,无注册/多账户)、登录、令牌;表结构预留 `ownerId`;TOTP 推迟到 M5。`/api/v1/openapi.json` 需要鉴权,CI 另导出静态文件(ADR 0004)。
 - 长期记忆 v1:模型可调用 `memory.save / memory.search`(`memory.save` 默认需要审批,借此实现最小审批管道);UI 可查看/编辑/删除。按 ADR 0007 提前建 `items` / `item_edges` / `items_fts`(只建表)与 `memory_facts` 子集,M2 只做增量迁移。
