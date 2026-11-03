@@ -46,6 +46,8 @@ jobs:
         run: pnpm check:spdx
       - name: Leftover placeholders
         run: pnpm check:placeholders
+      - name: No credentials in recorded fixtures
+        run: pnpm check:secrets
       - name: Dependency license allowlist and telemetry denylist
         run: pnpm check:licenses
       - name: REUSE compliance

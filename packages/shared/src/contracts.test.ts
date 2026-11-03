@@ -12,6 +12,7 @@ import {
     MemorySaveInput,
     MemorySearchInput,
     ModelProfileInput,
+    ModelProfilePatch,
     PageQuery,
     pageOf,
     ProblemDetails,
@@ -78,6 +79,12 @@ describe('ModelProfileInput', () => {
         expect(ModelProfileInput.safeParse({ ...withUrl, apiKeyRef: 'file:deepseek' }).success).toBe(true);
         expect(ModelProfileInput.safeParse({ ...withUrl, apiKeyRef: 'sk-abcdef1234567890' }).success).toBe(false);
         expect(ModelProfileInput.safeParse({ ...withUrl, apiKeyRef: 'env:' }).success).toBe(false);
+    });
+
+    it('拒绝未知字段(例如明文 apiKey)', () => {
+        const withUrl = { ...base, baseURL: 'https://api.example.com/v1', apiKeyRef: null };
+        expect(ModelProfileInput.safeParse({ ...withUrl, apiKey: 'sk-abcdef1234567890' }).success).toBe(false);
+        expect(ModelProfilePatch.safeParse({ apiKey: 'sk-abcdef1234567890' }).success).toBe(false);
     });
 
     it('baseURL 只允许 http / https', () => {
