@@ -19,7 +19,7 @@ CREATE TABLE items (
   kind TEXT NOT NULL CHECK (kind IN ('category','content')),
   type TEXT NOT NULL,             -- 'mail.folder' | 'mail.message' | 'novel' | 'novel.chapter' | 'character' | 'video.stats' …
   source TEXT NOT NULL,           -- 提供者 id
-  source_ref TEXT,                -- 提供者内部引用;UNIQUE(source, source_ref)
+  source_ref TEXT,                -- 提供者内部引用;UNIQUE(owner_id, source, source_ref)(按 owner 隔离,为 2.0 多用户预留)
   title TEXT NOT NULL, summary TEXT, icon TEXT, color TEXT,
   child_count INTEGER NOT NULL DEFAULT 0,       -- 缓存:直接子项数
   descendant_count INTEGER NOT NULL DEFAULT 0,  -- 缓存:后代条目总数(按 primary 边计)
