@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 尹绪柏 (Theodore Yin)
 
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { MetaResponseSchema } from '@ai-personal/shared';
 import { describe, expect, it } from 'vitest';
 import { createApp } from './app.js';
@@ -27,5 +30,17 @@ describe('server app', () => {
     it('未知路径返回 404', async () => {
         const res = await app.request('/nope');
         expect(res.status).toBe(404);
+    });
+
+    it('配置 webDir 时托管 Web UI,/api 下未知路径仍为 404', async () => {
+        const dir = mkdtempSync(join(tmpdir(), 'aip-web-'));
+        writeFileSync(join(dir, 'index.html'), '<!doctype html><title>AI-Personal</title>');
+        const web = createApp({ sourceUrl: null, webDir: dir });
+
+        const page = await web.request('/some/route');
+        expect(page.status).toBe(200);
+        expect(await page.text()).toContain('AI-Personal');
+        expect((await web.request('/api/v1/nope')).status).toBe(404);
+        expect((await web.request('/healthz')).status).toBe(200);
     });
 });

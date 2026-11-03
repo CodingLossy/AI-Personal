@@ -7,6 +7,9 @@
   "author": "尹绪柏 (Theodore Yin) <x19169738916@163.com>",
   "type": "module",
   "main": "./dist/index.js",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "dev": "node --watch --import tsx src/index.ts",
