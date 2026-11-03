@@ -1,0 +1,54 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (C) 2026 尹绪柏 (Theodore Yin) */
+
+:root {
+    color-scheme: light dark;
+    font-family:
+        system-ui,
+        -apple-system,
+        'Segoe UI',
+        'PingFang SC',
+        'Microsoft YaHei',
+        sans-serif;
+    --fg: #1d1d1f;
+    --bg: #ffffff;
+    --muted: #6e6e73;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --fg: #f5f5f7;
+        --bg: #111113;
+        --muted: #a1a1a6;
+    }
+}
+
+body {
+    margin: 0;
+    color: var(--fg);
+    background: var(--bg);
+}
+
+.layout {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+main {
+    flex: 1;
+    padding: 2rem 1rem;
+    max-width: 48rem;
+    margin: 0 auto;
+}
+
+.footer {
+    padding: 1rem;
+    text-align: center;
+    font-size: 0.875rem;
+    color: var(--muted);
+}
+
+.footer a {
+    color: inherit;
+}

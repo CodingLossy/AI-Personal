@@ -1,0 +1,28 @@
+{
+  "name": "@ai-personal/web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "AI-Personal Web UI",
+  "license": "AGPL-3.0-only",
+  "author": "尹绪柏 (Theodore Yin) <x19169738916@163.com>",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ai-personal/shared": "workspace:*",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.2.1",
+    "vite": "^8.3.5"
+  }
+}
