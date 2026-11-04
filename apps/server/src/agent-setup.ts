@@ -6,9 +6,16 @@ import type { AgentTool } from '@ai-personal/agent';
 import type { MemoryService } from '@ai-personal/memory';
 import { type ModelProvider, selectProfile } from '@ai-personal/providers';
 import { MemorySaveInput, MemorySearchInput } from '@ai-personal/shared';
+import { z } from 'zod';
 import type { ModelProfileRecord, Repositories } from '@ai-personal/storage';
 
 const MAX_SUMMARY_CHARS = 2000;
+
+/** memory.search 工具的输入:与 API 的 MemorySearchInput 相同,但 query 可以为空(列出最近的记忆)。 */
+const MemoryRecallInput = MemorySearchInput.extend({
+    query: z.string().max(500).default(''),
+    limit: z.number().int().min(1).max(30).optional(),
+});
 
 const SUMMARY_PROMPT = [
     'Summarize the following part of a conversation between a user and an assistant.',
@@ -61,20 +68,25 @@ export function createMemoryTools(memory: MemoryService): AgentTool[] {
         },
         {
             name: 'memory.search',
-            description: 'Search long-term memory for facts about the user. Returns matching memories, best first.',
+            description:
+                'Search long-term memory for facts about the user. Use 1-2 short, broad keywords (e.g. "深圳" or ' +
+                '"city"), or leave query empty to list recent memories. If nothing matches, the most recently ' +
+                'updated memories are returned instead, so check them yourself.',
             parameters: {
                 type: 'object',
                 properties: {
-                    query: { type: 'string', description: 'Words to look for.' },
+                    query: {
+                        type: 'string',
+                        description: '1-2 short, broad keywords; an empty string lists recent memories.',
+                    },
                     limit: { type: 'integer', minimum: 1, maximum: 30 },
                 },
-                required: ['query'],
                 additionalProperties: false,
             },
             requiresApproval: false,
             summarize: () => 'Search memory',
             execute: (input, ctx) => {
-                const result = memory.search(ctx.ownerId, MemorySearchInput.parse(input));
+                const result = memory.recall(ctx.ownerId, MemoryRecallInput.parse(input));
                 return Promise.resolve({
                     items: result.items.map((m) => ({
                         id: m.id,

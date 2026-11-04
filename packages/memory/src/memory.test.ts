@@ -69,4 +69,33 @@ describe('MemoryService', () => {
         expect(found.items.map((m) => m.text)).toEqual(['用户搬到了上海']);
         expect(found.items[0]).toMatchObject({ origin: 'user_explicit', confidence: 0.9, cardinality: 'single' });
     });
+
+    it('recall:检索没有字面命中时回退为最近更新的 active 记忆', () => {
+        const service = createMemoryService(repos);
+        service.save(ownerId, { text: '用户住在深圳。' }, 'user_explicit');
+        expect(service.search(ownerId, { query: '居住 城市 住址' }).items).toEqual([]);
+        const recalled = service.recall(ownerId, { query: '居住 城市 住址' });
+        expect(recalled.items.map((m) => m.text)).toEqual(['用户住在深圳。']);
+        expect(recalled.items[0]).toMatchObject({ status: 'active', score: 0 });
+    });
+
+    it('recall:query 为空时列出最近的 active 记忆,最多 20 条,不含已更替的', () => {
+        const service = createMemoryService(repos);
+        service.save(ownerId, { text: '用户常住杭州', entityKey: 'user.location.city' }, 'user_explicit');
+        service.save(ownerId, { text: '用户搬到了上海', entityKey: 'user.location.city' }, 'user_explicit');
+        for (let i = 0; i < 25; i++) service.save(ownerId, { text: `事实 ${i}` }, 'manual');
+        for (const query of [undefined, '', '   ']) {
+            const items = service.recall(ownerId, { query }).items;
+            expect(items).toHaveLength(20);
+            expect(items.every((m) => m.status === 'active')).toBe(true);
+            expect(items.map((m) => m.text)).not.toContain('用户常住杭州');
+        }
+    });
+
+    it('recall:有命中时与 search 结果一致', () => {
+        const service = createMemoryService(repos);
+        service.save(ownerId, { text: '用户住在深圳。' }, 'user_explicit');
+        service.save(ownerId, { text: '用户喜欢喝茶' }, 'user_explicit');
+        expect(service.recall(ownerId, { query: '深圳' })).toEqual(service.search(ownerId, { query: '深圳' }));
+    });
 });

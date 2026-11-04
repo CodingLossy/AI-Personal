@@ -32,7 +32,18 @@ export function defaultCardinality(entityKey: string | undefined): Memory['cardi
 export interface MemoryService {
     save(ownerId: string, input: MemorySaveInput, origin: Memory['origin']): MemorySaveResult;
     search(ownerId: string, input: MemorySearchInput): MemorySearchResult;
+    /**
+     * 给模型用的检索:query 为空,或检索没有命中时,回退为最近更新的 active 记忆(最多 RECALL_FALLBACK_LIMIT 条),
+     * 由模型自己判断哪条相关。关键词检索没有语义匹配,模型想到的词常与原文没有字面重合。
+     */
+    recall(
+        ownerId: string,
+        input: { query?: string | undefined; types?: Memory['memType'][] | undefined; limit?: number | undefined },
+    ): MemorySearchResult;
 }
+
+/** recall 回退时最多返回的条数。 */
+export const RECALL_FALLBACK_LIMIT = 20;
 
 /** 记忆 v1:凭据一律拒存;其余写入走仓储的合并 / 更替规则。 */
 export function createMemoryService(repos: Repositories): MemoryService {
@@ -60,6 +71,20 @@ export function createMemoryService(repos: Repositories): MemoryService {
         search(ownerId, rawInput) {
             const input = MemorySearchInputSchema.parse(rawInput);
             return { items: repos.memories.search(ownerId, input.query, { types: input.types, limit: input.limit }) };
+        },
+        recall(ownerId, input) {
+            const query = input.query?.trim() ?? '';
+            if (query) {
+                const found = this.search(ownerId, { query, types: input.types, limit: input.limit });
+                if (found.items.length > 0) return found;
+            }
+            const limit = Math.min(input.limit ?? RECALL_FALLBACK_LIMIT, RECALL_FALLBACK_LIMIT);
+            const items = repos.memories
+                .list(ownerId, RECALL_FALLBACK_LIMIT * 3)
+                .filter((m) => m.status === 'active' && (!input.types || input.types.includes(m.memType)))
+                .slice(0, limit)
+                .map((m) => ({ ...m, score: 0 }));
+            return { items };
         },
     };
 }
