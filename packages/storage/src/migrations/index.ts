@@ -8,6 +8,7 @@ import { migration0003 } from './0003_fs_roots.js';
 import { migration0004 } from './0004_mcp_servers.js';
 import { migration0005 } from './0005_embeddings.js';
 import { migration0006 } from './0006_knowledge_base.js';
+import { migration0007 } from './0007_memory_v2.js';
 
 /** 按 id 顺序排列的全部迁移;新增迁移追加在末尾,已发布的迁移不得修改。 */
 export const migrations: readonly Migration[] = [
@@ -17,4 +18,5 @@ export const migrations: readonly Migration[] = [
     migration0004,
     migration0005,
     migration0006,
+    migration0007,
 ];

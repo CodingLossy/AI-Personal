@@ -16,6 +16,11 @@ export interface Migration {
      * 因此这类迁移单独执行:先关外键,在自己的事务内执行并做 foreign_key_check,最后恢复外键(ADR 0005)。
      */
     rebuild?: boolean;
+    /**
+     * 数据迁移:在 sql 之后、同一个事务中执行(例如需要生成 ULID 的回填,ADR 0007 第 5.3 节)。
+     * 与 sql 一样,发布后不得修改;只能使用迁移文件自己的代码,不能调用会演进的仓储。
+     */
+    data?: (sqlite: Sqlite, context: { now: () => Date }) => void;
 }
 
 export interface MigrateOptions {
@@ -148,6 +153,7 @@ export async function migrate(
         sqlite.transaction(() => {
             for (const m of current) {
                 sqlite.exec(m.sql);
+                m.data?.(sqlite, { now });
                 record.run(m.id, m.name, checksum(m.sql), now().toISOString());
             }
         })();

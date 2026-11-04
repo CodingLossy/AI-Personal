@@ -22,6 +22,8 @@ export const AgentEvent = z.discriminatedUnion('type', [
         assistantMessageId: Id,
     }),
     z.object({ type: z.literal('text-delta'), runId: Id, delta: z.string() }),
+    /** 本次运行用到的记忆(M2 PR 12 起发送,ADR 0007 第 5.4 节);UI 据此显示「本次用到的记忆」与反馈按钮。 */
+    z.object({ type: z.literal('memory-used'), runId: Id, ids: z.array(Id) }),
     z.object({ type: z.literal('tool-call'), runId: Id, callId: z.string(), name: z.string(), input: z.unknown() }),
     z.object({
         type: z.literal('approval-required'),

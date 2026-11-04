@@ -6,6 +6,10 @@ import { z } from 'zod';
 import { Id, IsoDateTime } from './common.js';
 import { MAX_PAGE_LIMIT } from './pagination.js';
 
+/** item_edges.rel 的取值:supersedes 与 forked_from 自 M2 起使用(ADR 0007 第 5.4 节)。 */
+export const ItemRel = z.enum(['contains', 'mentions', 'derived', 'supersedes', 'forked_from']);
+export type ItemRel = z.infer<typeof ItemRel>;
+
 export const ItemKind = z.enum(['category', 'content']);
 export type ItemKind = z.infer<typeof ItemKind>;
 
