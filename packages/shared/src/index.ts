@@ -11,4 +11,5 @@ export * from './models.js';
 export * from './pagination.js';
 export * from './sessions.js';
 export * from './settings.js';
+export * from './tools.js';
 export * from './ws.js';
