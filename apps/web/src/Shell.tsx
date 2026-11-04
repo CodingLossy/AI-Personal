@@ -7,6 +7,7 @@ import { api } from './api.js';
 import { ApprovalPanel } from './ApprovalPanel.js';
 import { AuditPage } from './AuditPage.js';
 import { ChatView } from './ChatView.js';
+import { ItemsPage } from './ItemsPage.js';
 import { useI18n } from './i18n.js';
 import { MemoryPage } from './MemoryPage.js';
 import { navigate, routePath, useRoute, type Route } from './router.js';
@@ -82,6 +83,9 @@ export function Shell({
                     ))}
                 </nav>
                 <div className="sidebar-foot">
+                    <Link to={{ name: 'items' }} className={route.name === 'items' ? 'active' : ''}>
+                        {t('nav.items')}
+                    </Link>
                     <Link to={{ name: 'memory' }} className={route.name === 'memory' ? 'active' : ''}>
                         {t('nav.memory')}
                     </Link>
@@ -104,6 +108,8 @@ export function Shell({
                     <MemoryPage />
                 ) : route.name === 'audit' ? (
                     <AuditPage />
+                ) : route.name === 'items' ? (
+                    <ItemsPage />
                 ) : (
                     <ChatView key={activeId ?? 'new'} sessionId={activeId} onSessionsChanged={reloadSessions} />
                 )}

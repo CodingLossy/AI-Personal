@@ -4,7 +4,7 @@
 // Web UI 冒烟(M1 方案第 8 节第 8 项,ADR 0009 第 6 节):启动构建后的 server(托管 apps/web/dist)和一个
 // 慢速回放 DeepSeek fixture 的假端点,在浏览器里完成初始化 → 配置档 → 流式中刷新 → 审批 → 记忆管理。
 import { type ChildProcess, spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -197,4 +197,19 @@ test('初始化、配置档、流式中刷新、审批与记忆管理', async ({
     await expect(preauth).toContainText('总是允许');
     await preauth.getByRole('button', { name: '撤销' }).click();
     await expect(page.getByText('还没有预授权。')).toBeVisible();
+
+    // 知识地图(M2 验收第 5 条):授权含小说的文件夹后,「小说 → 某书 → 某章」逐层下钻并打开
+    const books = join(realpathSync.native(dir), 'Books');
+    mkdirSync(books);
+    writeFileSync(join(books, '凡人.txt'), '第一章 山村少年\n他出生在一个小山村。\n第二章 入门\n他拜入了七玄门。\n');
+    await page.getByRole('textbox', { name: '文件夹路径' }).fill(books);
+    await page.getByRole('button', { name: '授权', exact: true }).click();
+    await expect(page.locator(`[data-fs-root="${books.replaceAll('\\', '\\\\')}"]`)).toBeVisible();
+    await page.getByRole('link', { name: '知识地图' }).click();
+    await page.getByRole('button', { name: '立即同步' }).click();
+    await page.getByRole('button', { name: /小说/ }).click();
+    await page.getByRole('button', { name: /凡人/ }).click();
+    await page.getByRole('button', { name: '第二章 入门' }).click();
+    await expect(page.locator('.item-text')).toHaveText('第二章 入门\n他拜入了七玄门。\n');
+    await expect(page.locator('.breadcrumb')).toHaveText('小说 › 凡人 › 第二章 入门');
 });
