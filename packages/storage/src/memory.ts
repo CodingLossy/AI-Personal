@@ -6,6 +6,7 @@
 import type { Memory } from '@ai-personal/shared';
 import type { Connection } from './db.js';
 import { newId } from './ids.js';
+import type { ItemRepository } from './items.js';
 
 export interface NewMemory {
     text: string;
@@ -39,14 +40,23 @@ interface Row {
     sensitivity: number;
     confidence: number;
     origin: Memory['origin'];
+    tier: NonNullable<Memory['tier']>;
+    importance: number;
+    pinned: number;
+    supersedesId: string | null;
+    lastConfirmedAt: string | null;
     createdAt: string;
     updatedAt: string;
 }
 
 const SELECT = `SELECT f.item_id AS id, i.summary AS text, f.mem_type AS memType, f.subtype, f.entity_key AS entityKey,
         f.cardinality, f.value_json AS valueJson, f.status, f.domain, f.sensitivity, f.confidence, f.origin,
+        f.tier, f.importance, f.pinned, f.supersedes_id AS supersedesId, f.last_confirmed_at AS lastConfirmedAt,
         f.created_at AS createdAt, f.updated_at AS updatedAt
     FROM memory_facts f JOIN items i ON i.id = f.item_id`;
+
+const DOMAIN_TITLES = { work: '工作', life: '生活', general: '通用' } as const;
+const GROUP_TITLES = { semantic: '事实', episodic: '经历', procedural: '方法', decision: '决策' } as const;
 
 const TITLE_LENGTH = 40;
 const MIN_TRIGRAM_QUERY = 3;
@@ -65,6 +75,11 @@ function toMemory(row: Row): Memory {
         sensitivity: row.sensitivity,
         confidence: row.confidence,
         origin: row.origin,
+        tier: row.tier,
+        importance: row.importance,
+        pinned: row.pinned === 1,
+        supersedesId: row.supersedesId,
+        lastConfirmedAt: row.lastConfirmedAt,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
     };
@@ -79,9 +94,52 @@ function ftsQuery(query: string): string {
         .join(' OR ');
 }
 
-export function createMemoryRepository(conn: Connection, now: () => Date) {
+export function createMemoryRepository(conn: Connection, now: () => Date, items: ItemRepository) {
     const { sqlite } = conn;
     const iso = () => now().toISOString();
+
+    /** 找到或创建一个记忆类别(ADR 0007 第 5.2 节第 3 条)。 */
+    function category(
+        ownerId: string,
+        ref: string,
+        parentId: string | null,
+        type: string,
+        title: string,
+        meta?: Record<string, unknown>,
+    ): string {
+        const found = items.bySource(ownerId, 'memory', ref);
+        if (found) return found.id;
+        return items.upsert(ownerId, {
+            source: 'memory',
+            sourceRef: ref,
+            kind: 'category',
+            type,
+            title,
+            icon: parentId ? null : 'brain',
+            meta: meta ?? null,
+            parentId,
+        }).id;
+    }
+
+    /** 记忆在导航树中的父类别:记忆 → 域 → 类型(被更替的放进「历史版本」)。 */
+    function parentFor(
+        ownerId: string,
+        m: { domain: Memory['domain']; memType: Memory['memType']; subtype: Memory['subtype']; superseded: boolean },
+    ): string {
+        const root = category(ownerId, 'memory', null, 'memory', '记忆');
+        const domain = category(ownerId, `memory:${m.domain}`, root, 'memory.domain', DOMAIN_TITLES[m.domain]);
+        const group = m.subtype === 'decision' ? 'decision' : m.memType;
+        const ref = `memory:${m.domain}:${group}`;
+        const parent = category(ownerId, ref, domain, 'memory.group', GROUP_TITLES[group]);
+        return m.superseded
+            ? category(ownerId, `${ref}:history`, parent, 'memory.history', '历史版本', { hidden: true })
+            : parent;
+    }
+
+    /** 按记忆当前的域、类型与状态重新挂到导航树上。 */
+    function place(ownerId: string, row: Row): void {
+        items.attach(ownerId, row.id, parentFor(ownerId, { ...row, superseded: row.status === 'superseded' }));
+    }
 
     const q = {
         insertItem: sqlite.prepare(
@@ -109,6 +167,12 @@ export function createMemoryRepository(conn: Connection, now: () => Date) {
             `${SELECT} WHERE f.owner_id = ? AND f.entity_key = ? AND f.cardinality = 'single' AND f.status = 'active'`,
         ),
         setStatus: sqlite.prepare('UPDATE memory_facts SET status = ?, updated_at = ? WHERE item_id = ?'),
+        setSupersedes: sqlite.prepare('UPDATE memory_facts SET supersedes_id = ? WHERE item_id = ?'),
+        supersedesEdge: sqlite.prepare(
+            `INSERT INTO item_edges (parent_id, child_id, rel, position, primary_edge) VALUES (?, ?, 'supersedes', NULL, 0)
+             ON CONFLICT DO NOTHING`,
+        ),
+        confirmedAt: sqlite.prepare('UPDATE memory_facts SET last_confirmed_at = ? WHERE item_id = ?'),
         confirm: sqlite.prepare(
             'UPDATE memory_facts SET confidence = min(0.99, confidence + 0.05), updated_at = ? WHERE item_id = ?',
         ),
@@ -162,6 +226,8 @@ export function createMemoryRepository(conn: Connection, now: () => Date) {
                 at,
             });
         }
+        q.confirmedAt.run(at, id);
+        items.attach(ownerId, id, parentFor(ownerId, { ...input, superseded: false }));
         return id;
     }
 
@@ -184,11 +250,17 @@ export function createMemoryRepository(conn: Connection, now: () => Date) {
                 if (input.entityKey && input.cardinality === 'single') {
                     const old = q.activeSingle.get(ownerId, input.entityKey);
                     if (old) {
+                        // 先标旧值再插入新值(部分唯一索引要求这个顺序,ADR 0007 第 2 节第 3 条)
                         q.setStatus.run('superseded', iso(), old.id);
+                        place(ownerId, { ...old, status: 'superseded' });
                         supersededId = old.id;
                     }
                 }
                 const id = insert(ownerId, input);
+                if (supersededId) {
+                    q.setSupersedes.run(supersededId, id);
+                    q.supersedesEdge.run(id, supersededId);
+                }
                 return supersededId
                     ? { outcome: 'superseded' as const, id, supersededId }
                     : { outcome: 'created' as const, id };
@@ -211,14 +283,24 @@ export function createMemoryRepository(conn: Connection, now: () => Date) {
             sqlite.transaction(() => {
                 const at = iso();
                 if (patch.text !== undefined) q.updateText.run(patch.text.slice(0, TITLE_LENGTH), patch.text, at, id);
-                if (patch.domain !== undefined) q.updateDomain.run(patch.domain, at, id);
+                if (patch.domain !== undefined) {
+                    q.updateDomain.run(patch.domain, at, id);
+                    place(ownerId, q.get.get(ownerId, id)!); // 改了域:挂到新域的同类型下
+                }
                 if (patch.retract) q.setStatus.run('retracted', at, id);
             })();
             return this.get(ownerId, id);
         },
-        /** 「忘记」:硬删除条目,记忆与出处由外键级联删除,FTS 由触发器同步。 */
+        /**
+         * 「忘记」:先从导航树上摘下(扣减祖先计数),再硬删除条目;记忆、出处、反馈、冲突、嵌入与向量
+         * 由外键与触发器级联删除,FTS 由触发器同步(ADR 0007 第 5.2 节第 5 条)。
+         */
         delete(ownerId: string, id: string): boolean {
-            return q.deleteItem.run(ownerId, id).changes > 0;
+            return sqlite.transaction(() => {
+                if (!q.get.get(ownerId, id)) return false;
+                items.attach(ownerId, id, null);
+                return q.deleteItem.run(ownerId, id).changes > 0;
+            })();
         },
         /** 检索:能用 trigram 的查询走 FTS5(bm25 排序),否则回退为 LIKE。score 越大越相关。 */
         search(

@@ -486,6 +486,7 @@ export function createRepositories(conn: Connection, options: RepoOptions = {}) 
         },
     };
 
+    const itemRepo = createItemRepository(conn, now);
     return {
         /** 在一个事务中执行(better-sqlite3 同步事务)。 */
         transaction<T>(fn: () => T): T {
@@ -501,12 +502,12 @@ export function createRepositories(conn: Connection, options: RepoOptions = {}) 
         runs,
         events,
         modelProfiles: createProfileRepository(conn, now),
-        memories: createMemoryRepository(conn, now),
+        memories: createMemoryRepository(conn, now, itemRepo),
         summaries: createSummaryRepository(conn, now),
         settings: createSettingsRepository(conn, now),
         ...createToolRepositories(conn, now),
         fsRoots: createFsRootRepository(conn, now),
-        items: createItemRepository(conn, now),
+        items: itemRepo,
         mcpServers: createMcpServerRepository(conn, now),
         embeddings: createEmbeddingStore(conn, now),
         kb: createKbRepository(conn, now),

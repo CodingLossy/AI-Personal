@@ -305,8 +305,38 @@ export function createItemRepository(conn: Connection, now: () => Date) {
         })();
     }
 
+    /**
+     * 改变已有条目的 primary 父项(没有 source_ref 的条目也可以,例如记忆);parentId 为 null 时从树上摘下。
+     * 沿新旧两条祖先链调整计数,并检测环(ADR 0007 第 5.2 节)。
+     */
+    function attach(ownerId: string, id: string, parentId: string | null, position: number | null = null): void {
+        sqlite.transaction(() => {
+            const row = q.get.get(ownerId, id);
+            if (!row) throw new StorageError('the item does not exist');
+            if (parentId) {
+                const parent = q.get.get(ownerId, parentId);
+                if (!parent || parent.deletedAt) throw new StorageError('the parent item does not exist');
+                if (isAncestorOrSelf(id, parentId)) {
+                    throw new ItemCycleError('an item cannot be moved under itself or its descendants');
+                }
+            }
+            const oldParent = q.parentOf.get(id)?.parentId ?? null;
+            if (oldParent === parentId) return;
+            const size = row.deletedAt ? 0 : 1 + row.descendantCount;
+            if (oldParent) {
+                q.deleteEdge.run(id);
+                if (size) adjustAncestors(oldParent, -1, -size);
+            }
+            if (parentId) {
+                q.insertEdge.run(parentId, id, position);
+                if (size) adjustAncestors(parentId, 1, size);
+            }
+        })();
+    }
+
     return {
         get,
+        attach,
         bySource(ownerId: string, source: string, sourceRef: string): Item | null {
             const row = q.bySource.get(ownerId, source, sourceRef);
             return row ? toItem(row) : null;
