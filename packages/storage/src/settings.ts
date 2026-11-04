@@ -7,6 +7,8 @@ import type { Connection } from './db.js';
 
 type Key = keyof Settings;
 const KEYS = Object.keys(DEFAULT_SETTINGS) as Key[];
+/** 值为对象的键:读取与写入时与默认值 / 现有值浅合并。 */
+const NESTED: readonly Key[] = ['memory', 'knowledgeBase'];
 
 export function createSettingsRepository(conn: Connection, now: () => Date) {
     const { sqlite } = conn;
@@ -26,15 +28,16 @@ export function createSettingsRepository(conn: Connection, now: () => Date) {
             if (!(KEYS as string[]).includes(row.key)) continue;
             const key = row.key as Key;
             const value = JSON.parse(row.valueJson) as never;
-            (settings as Record<Key, unknown>)[key] =
-                key === 'memory' ? { ...DEFAULT_SETTINGS.memory, ...(value as object) } : value;
+            (settings as Record<Key, unknown>)[key] = NESTED.includes(key)
+                ? { ...(DEFAULT_SETTINGS[key] as object), ...(value as object) }
+                : value;
         }
         return settings;
     }
 
     return {
         get,
-        /** 部分更新:只写入给出的键;memory 与现有值浅合并。 */
+        /** 部分更新:只写入给出的键;memory、knowledgeBase 与现有值浅合并。 */
         update(ownerId: string, patch: SettingsPatch): Settings {
             const current = get(ownerId);
             const at = now().toISOString();
@@ -42,7 +45,7 @@ export function createSettingsRepository(conn: Connection, now: () => Date) {
                 for (const key of KEYS) {
                     const value = patch[key];
                     if (value === undefined) continue;
-                    const next = key === 'memory' ? { ...current.memory, ...(value as object) } : value;
+                    const next = NESTED.includes(key) ? { ...(current[key] as object), ...(value as object) } : value;
                     q.upsert.run(ownerId, key, JSON.stringify(next), at);
                 }
             })();

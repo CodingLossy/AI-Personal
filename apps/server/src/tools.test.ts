@@ -100,6 +100,7 @@ describe('/api/v1/tools、/approvals、/preauthorizations、/audit', () => {
             ['items.open', 'read', 'auto', true, null],
             ['items.roots', 'read', 'auto', true, null],
             ['items.search', 'read', 'auto', true, null],
+            ['kb.search', 'read', 'auto', true, null],
             ['memory.save', 'write', 'required', true, null],
             ['memory.search', 'read', 'auto', true, null],
             ['time', 'read', 'auto', true, null],

@@ -23,6 +23,7 @@ import { createFsRootRepository } from './fs-roots.js';
 import { createItemRepository } from './items.js';
 import { createMcpServerRepository } from './mcp.js';
 import { createEmbeddingStore } from './embeddings.js';
+import { createKbRepository } from './kb.js';
 import { decodeCursor, encodeCursor, type Page } from './cursor.js';
 import type { Connection } from './db.js';
 import { newId } from './ids.js';
@@ -508,6 +509,7 @@ export function createRepositories(conn: Connection, options: RepoOptions = {}) 
         items: createItemRepository(conn, now),
         mcpServers: createMcpServerRepository(conn, now),
         embeddings: createEmbeddingStore(conn, now),
+        kb: createKbRepository(conn, now),
         ...createAuthRepositories(conn, now),
     };
 }

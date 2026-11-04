@@ -316,6 +316,23 @@ export function SettingsPage({ settings, onSettings }: { settings: Settings; onS
                     {t('settings.defaultCheap')}
                     {profileSelect('defaultCheapProfileId', 'cheap')}
                 </label>
+                <label>
+                    {t('settings.chunkChars')}
+                    <input
+                        type="number"
+                        name="chunkChars"
+                        min={200}
+                        max={4000}
+                        step={100}
+                        defaultValue={settings.knowledgeBase.chunkChars}
+                        onBlur={(e) => {
+                            const value = Number(e.target.value);
+                            if (Number.isInteger(value) && value >= 200 && value <= 4000) {
+                                void update({ knowledgeBase: { chunkChars: value } });
+                            }
+                        }}
+                    />
+                </label>
                 {note ? <p className="small muted">{note}</p> : null}
             </section>
             <ModelProfiles onChanged={setProfiles} />

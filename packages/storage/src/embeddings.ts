@@ -116,6 +116,8 @@ export function createEmbeddingStore(conn: Connection, now: () => Date) {
             'UPDATE embed_queue SET attempts = 0, next_attempt_at = ?, last_error = NULL WHERE next_attempt_at >= ?',
         ),
         clearEmbeddings: sqlite.prepare('DELETE FROM embeddings'),
+        removeEmbeddings: sqlite.prepare<[string, number]>('DELETE FROM embeddings WHERE item_id = ? AND chunk >= ?'),
+        removeQueued: sqlite.prepare<[string, number]>('DELETE FROM embed_queue WHERE item_id = ? AND chunk >= ?'),
         clearState: sqlite.prepare('DELETE FROM embed_state'),
     };
 
@@ -187,6 +189,14 @@ export function createEmbeddingStore(conn: Connection, now: () => Date) {
                 if (existing) q.deleteEmbedding.run(itemId, chunk);
                 q.enqueue.run({ ownerId, itemId, chunk, text, at: iso() });
                 return true;
+            })();
+        },
+
+        /** 删除一个条目从 fromChunk 起的向量与排队任务(文件删除或分块变少时;向量行由触发器清理)。 */
+        removeItem(itemId: string, fromChunk = 0): void {
+            sqlite.transaction(() => {
+                q.removeEmbeddings.run(itemId, fromChunk);
+                q.removeQueued.run(itemId, fromChunk);
             })();
         },
 

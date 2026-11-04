@@ -5,7 +5,7 @@ import { mkdirSync } from 'node:fs';
 import type { Server } from 'node:http';
 import { serve } from '@hono/node-server';
 import { EventBus, RunManager } from '@ai-personal/agent';
-import { createItemService } from '@ai-personal/items';
+import { createItemService, createKnowledgeBase } from '@ai-personal/items';
 import { createMemoryService } from '@ai-personal/memory';
 import { createProvider, Redactor, SecretStore } from '@ai-personal/providers';
 import { createRepositories, openStorage } from '@ai-personal/storage';
@@ -46,16 +46,30 @@ if (repos.owners.count() === 0) {
 const providerDeps = { secrets, redactor };
 const providerFor = (profile: Parameters<typeof createProvider>[0]) => createProvider(profile, providerDeps);
 const memory = createMemoryService(repos);
+// 嵌入队列:有 embed 配置档或已有向量表时才加载 sqlite-vec(ADR 0014)
+const embeddings = createEmbeddingService({
+    repos,
+    providerFor,
+    redact: (text) => redactor.redact(text),
+    onError: (err) => logger.warn({ err }, 'embedding failed'),
+});
+// 知识库:条目同步之后在后台分块并入队嵌入(ADR 0015)
+const kb = createKnowledgeBase({
+    repos,
+    vectors: embeddings,
+    onError: (err, { itemId }) => logger.warn({ err, itemId }, 'knowledge base indexing failed'),
+});
 const items = createItemService({
     repos,
     onError: (err, { provider }) => logger.warn({ err, provider }, 'item provider sync failed'),
+    onSynced: (ownerId) => void kb.index(ownerId),
 });
 const bus = new EventBus();
 const runs = new RunManager({
     repos,
     bus,
     providerFor,
-    tools: createToolRegistry(memory, repos, items),
+    tools: createToolRegistry(memory, repos, items, kb),
     redact: (text) => redactor.redact(text),
     summarize: createSummarizer(repos, providerFor),
     onError: (err, { runId }) => logger.error({ err, runId }, 'run failed unexpectedly'),
@@ -71,13 +85,6 @@ for (const server of repos.mcpServers.allEnabled()) {
     void mcp.apply(server).then((status) => logger.info({ mcpServer: server.name, state: status.state }, 'MCP server'));
 }
 
-// 嵌入队列:有 embed 配置档或已有向量表时才加载 sqlite-vec(ADR 0014)
-const embeddings = createEmbeddingService({
-    repos,
-    providerFor,
-    redact: (text) => redactor.redact(text),
-    onError: (err) => logger.warn({ err }, 'embedding failed'),
-});
 embeddings.start(repos.owners.ids());
 
 const app = createApp({

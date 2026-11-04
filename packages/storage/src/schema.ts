@@ -178,6 +178,8 @@ export const TABLE_COLUMNS = {
     embeddings: ['id', 'owner_id', 'item_id', 'chunk', 'text', 'model', 'created_at'],
     embed_state: ['id', 'profile_id', 'model', 'dimensions', 'created_at'],
     embed_usage: ['owner_id', 'day', 'count'],
+    kb_sources: ['item_id', 'owner_id', 'mtime', 'size', 'chunk_chars', 'chunks', 'error', 'indexed_at'],
+    kb_chunks: ['id', 'owner_id', 'item_id', 'chunk', 'page', 'heading', 'text'],
 } as const satisfies Record<string, readonly string[]>;
 
 export type TableName = keyof typeof TABLE_COLUMNS;
