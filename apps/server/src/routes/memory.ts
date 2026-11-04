@@ -96,6 +96,7 @@ const approvalRoute = createRoute({
     },
     responses: {
         200: json(z.object({ callId: Id, decision: ApprovalDecision.shape.decision }), 'Decision recorded'),
+        400: problem('Invalid request, or pre-authorization (remember) is not available'),
         409: problem('No pending approval with this id'),
         ...authErrors,
     },
@@ -145,7 +146,16 @@ export function memoryRoutes(deps: MemoryRouteDeps) {
         })
         .openapi(approvalRoute, (c) => {
             const { callId } = c.req.valid('param');
-            const { decision } = c.req.valid('json');
+            const { decision, remember } = c.req.valid('json');
+            // 预授权在 M2 PR 2 实现(ADR 0010 第 3 节);在那之前明确拒绝,而不是静默忽略
+            if (remember) {
+                throw new ApiError(
+                    400,
+                    'validation_failed',
+                    'Bad Request',
+                    'Pre-authorization (remember) is not available on this server yet.',
+                );
+            }
             if (!runs.resolveApproval(requireOwner(c), callId, decision)) {
                 throw new ApiError(
                     409,

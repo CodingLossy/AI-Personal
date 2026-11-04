@@ -3,6 +3,7 @@
 
 import { z } from 'zod';
 import { Id, IsoDateTime, Usage } from './common.js';
+import { PreauthRemember } from './tools.js';
 
 export const MessageRole = z.enum(['user', 'assistant', 'system']);
 export type MessageRole = z.infer<typeof MessageRole>;
@@ -101,5 +102,7 @@ export type Run = z.infer<typeof Run>;
 
 export const ApprovalDecision = z.object({
     decision: z.enum(['approve', 'reject']),
+    /** 批准时可选「记住这个决定」(ADR 0010 第 3 节);拒绝时不允许。 */
+    remember: PreauthRemember.optional(),
 });
 export type ApprovalDecision = z.infer<typeof ApprovalDecision>;

@@ -4,6 +4,7 @@
 import { z } from 'zod';
 import { Id, IsoDateTime, Usage } from './common.js';
 import { ProblemDetails } from './errors.js';
+import { ToolRisk } from './tools.js';
 
 export const AssistantState = z.enum(['idle', 'listening', 'thinking', 'speaking', 'executing']);
 export type AssistantState = z.infer<typeof AssistantState>;
@@ -22,12 +23,23 @@ export const AgentEvent = z.discriminatedUnion('type', [
     }),
     z.object({ type: z.literal('text-delta'), runId: Id, delta: z.string() }),
     z.object({ type: z.literal('tool-call'), runId: Id, callId: z.string(), name: z.string(), input: z.unknown() }),
-    z.object({ type: z.literal('approval-required'), runId: Id, callId: z.string(), summary: z.string() }),
+    z.object({
+        type: z.literal('approval-required'),
+        runId: Id,
+        callId: z.string(),
+        summary: z.string(),
+        /** 以下字段自 M2 起提供(ADR 0010 第 9 节),旧服务器不发送。 */
+        toolName: z.string().optional(),
+        risk: ToolRisk.optional(),
+        expiresAt: IsoDateTime.optional(),
+    }),
     z.object({
         type: z.literal('approval-resolved'),
         runId: Id,
         callId: z.string(),
         decision: z.enum(['approve', 'reject']),
+        /** 由谁 / 什么结束了审批;过期与运行取消都按 reject 处理(ADR 0010 第 5 节)。 */
+        reason: z.enum(['user', 'expired', 'cancelled']).optional(),
     }),
     z.object({
         type: z.literal('tool-result'),

@@ -50,6 +50,29 @@ jobs:
           name: openapi-v1
           path: apps/server/openapi/v1.json
 
+  openapi-compat:
+    name: OpenAPI breaking changes
+    # 只在 PR 上比较基线分支与本分支的 OpenAPI 文档(ADR 0010 第 10 节);oasdiff 以容器运行,不是项目依赖
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Compare apps/server/openapi/v1.json with the base branch
+        run: |
+          set -euo pipefail
+          if ! git cat-file -e "origin/${{ github.base_ref }}:apps/server/openapi/v1.json" 2>/dev/null; then
+            echo "The base branch has no OpenAPI document; nothing to compare."
+            exit 0
+          fi
+          git show "origin/${{ github.base_ref }}:apps/server/openapi/v1.json" > "$RUNNER_TEMP/base.json"
+          cp apps/server/openapi/v1.json "$RUNNER_TEMP/head.json"
+          # 事件联合类型(AgentEvent)新增或修改变体不算破坏性变更:ADR 0004 要求客户端忽略未知事件类型
+          cp .github/oasdiff-severity.txt "$RUNNER_TEMP/severity.txt"
+          docker run --rm -v "$RUNNER_TEMP:/specs:ro" tufin/oasdiff:v1.35.0 \
+            breaking /specs/base.json /specs/head.json --fail-on ERR --severity-levels /specs/severity.txt
+
   compliance:
     name: license compliance
     runs-on: ubuntu-latest
