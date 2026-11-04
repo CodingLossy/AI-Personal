@@ -43,7 +43,7 @@ M1 只有一个最小审批管道:`AgentTool.requiresApproval` 是布尔值,待�
   - `pathPrefix`:如 `fs.write` 只预授权某个授权目录内的路径;
   - `domain`:如 `web.fetch` 只预授权某个域名。
 
-  核对时由 core 用规范化后的参数判断,不由模型判断。工具不支持约束时只能整体预授权。
+  核对时由 core 用规范化后的参数判断,不由模型判断。工具不支持约束时只能整体预授权。工具也可以要求预授权**必须**带某种约束(`ToolInfo.requiredConstraint`):`web.fetch` 只能按域名预授权,不能对所有网址整体预授权(M2 PR 3 增补)。
 
 - **限制**:`external` 与 `dangerous` 级别的工具**不允许预授权**,服务器对这类请求的 `remember` 返回 400。只有「批准」可以带 `remember`;拒绝不会被记住。
 - 永久预授权可以在设置中查看和撤销(`Preauthorization` 类型,PR 2 提供 `GET` / `DELETE` 端点)。每条预授权记录最后使用时间。

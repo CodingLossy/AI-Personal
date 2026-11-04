@@ -31,6 +31,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@ai-personal/shared": "workspace:*"
+    "@ai-personal/shared": "workspace:*",
+    "zod": "^4.6.7"
   }
 }

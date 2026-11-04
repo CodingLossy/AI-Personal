@@ -57,6 +57,7 @@ export class ToolRegistry {
                 server: t.server ?? null,
                 preauthorizable: isPreauthorizable(t) && isEnabled(t, this.options),
                 constraints: Object.keys(t.constraints ?? {}) as PreauthConstraintKind[],
+                requiredConstraint: t.requireConstraint ?? null,
             }))
             .sort((a, b) => a.name.localeCompare(b.name));
     }

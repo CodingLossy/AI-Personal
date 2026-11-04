@@ -16,6 +16,14 @@ All notable user-visible changes are listed here. The format follows [Keep a Cha
   - a pending approval from any session shows in a panel at the top of the Web UI;
   - a local audit log (Web UI → Audit) records writes, outgoing actions, denied calls and pre-authorization changes, with redacted inputs.
 - New endpoints `GET /tools`, `GET /approvals`, `GET` / `DELETE /preauthorizations` and `GET /audit`. `POST /approvals/{callId}` accepts an optional `remember`.
+- **Built-in tools**:
+  - `time` (current time in any IANA time zone);
+  - `calc` (exact arithmetic with its own parser, no `eval`);
+  - `web.fetch`:
+    - fetches a page as text, marked as untrusted content;
+    - needs approval and can only be pre-authorized per domain;
+    - blocks loopback, private, link-local and cloud metadata addresses, including after DNS lookups and redirects;
+    - limits responses to 2 MB and 15 seconds.
 
 #### Changed
 
@@ -65,6 +73,14 @@ All notable user-visible changes are listed here. The format follows [Keep a Cha
   - 任何会话的待审批操作都会显示在 Web UI 顶部的面板中;
   - 本机审计日志(Web UI → 审计)记录写入、对外发送、被拒绝的调用与预授权变化,入参已脱敏。
 - 新端点 `GET /tools`、`GET /approvals`、`GET` / `DELETE /preauthorizations`、`GET /audit`;`POST /approvals/{callId}` 可带 `remember`。
+- **内置工具**:
+  - `time`(任意 IANA 时区的当前时间);
+  - `calc`(自写解析器的精确计算,不用 `eval`);
+  - `web.fetch`:
+    - 读取网页正文,标记为不可信内容;
+    - 需要审批,只能按域名预授权;
+    - 拒绝回环、私网、链路本地与云元数据地址(DNS 解析与跳转后同样校验);
+    - 响应上限 2 MB、15 秒。
 - 服务器重启时尚未处理的审批请求会过期,不再悄悄丢失。
 
 ### M1 · 对话核心(2026-11-04)

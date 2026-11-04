@@ -32,6 +32,8 @@ export const ToolInfo = z.object({
     preauthorizable: z.boolean(),
     /** 预授权时可用的参数约束;空数组表示只能整体预授权。 */
     constraints: z.array(PreauthConstraintKind),
+    /** 预授权时必须带的约束(例如 web.fetch 只能按域名预授权);null 表示不要求。自 M2 PR 3 起提供。 */
+    requiredConstraint: PreauthConstraintKind.nullable().optional(),
 });
 export type ToolInfo = z.infer<typeof ToolInfo>;
 

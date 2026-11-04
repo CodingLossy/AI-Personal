@@ -37,6 +37,8 @@ export interface ToolDefinition {
     untrustedOutput?: boolean;
     /** 预授权支持的参数约束:从入参中取出规范化的值,取不出时返回 null(此时约束不匹配)。 */
     constraints?: Partial<Record<PreauthConstraintKind, (input: unknown) => string | null>>;
+    /** 预授权时必须带这种约束(例如 web.fetch 只能按域名预授权,不能整体预授权)。 */
+    requireConstraint?: PreauthConstraintKind;
     /** 条件预授权:只能依据 core 已知的事实计算(ADR 0010 第 4 节)。 */
     autoApproveWhen?: (input: unknown, context: ToolContext) => boolean;
     /** 审批卡片上的一句话说明;输入来自模型,调用方须按不可信的纯文本显示。 */

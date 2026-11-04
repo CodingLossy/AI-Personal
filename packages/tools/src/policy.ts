@@ -105,6 +105,9 @@ export function decide(
 /** 校验批准时的 remember;返回错误说明,合法时返回 null(ADR 0010 第 3 节)。 */
 export function checkRemember(tool: ToolDefinition, remember: PreauthRemember): string | null {
     if (!isPreauthorizable(tool)) return `${tool.risk} tools cannot be pre-authorized`;
+    if (tool.requireConstraint && !remember.constraint?.[tool.requireConstraint]) {
+        return `the tool ${tool.name} can only be pre-authorized with a ${tool.requireConstraint} constraint`;
+    }
     for (const [kind, value] of Object.entries(remember.constraint ?? {})) {
         if (value === undefined) continue;
         if (!tool.constraints?.[kind as PreauthConstraintKind]) {

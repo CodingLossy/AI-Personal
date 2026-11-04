@@ -27,7 +27,12 @@ export function ToolCard({ tool, live = false }: { tool: LiveTool; live?: boolea
                 <pre>{show(tool.input)}</pre>
             </details>
             {pending ? (
-                <ApprovalActions callId={tool.callId} risk={tool.approval?.risk} />
+                <ApprovalActions
+                    callId={tool.callId}
+                    risk={tool.approval?.risk}
+                    toolName={tool.name}
+                    input={tool.input}
+                />
             ) : resolved ? (
                 <p className="small decision">
                     {tool.approval?.reason === 'expired'
