@@ -4,6 +4,23 @@ All notable user-visible changes are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### M2 · Tools and files (in progress)
+
+#### Added
+
+- **Tool framework and approvals** (ADR 0010):
+  - every tool has a risk level (`read`, `write`, `external`, `dangerous`) that decides whether it runs directly or needs your approval;
+  - approval requests are saved and expire after 30 minutes;
+  - when approving, you can choose "always in this session" or "always", except for tools that send things out or are dangerous;
+  - pre-authorizations are listed in Settings and can be revoked;
+  - a pending approval from any session shows in a panel at the top of the Web UI;
+  - a local audit log (Web UI → Audit) records writes, outgoing actions, denied calls and pre-authorization changes, with redacted inputs.
+- New endpoints `GET /tools`, `GET /approvals`, `GET` / `DELETE /preauthorizations` and `GET /audit`. `POST /approvals/{callId}` accepts an optional `remember`.
+
+#### Changed
+
+- Approvals that were pending when the server restarted now expire instead of being lost silently.
+
 ### M1 · Chat core (2026-11-04)
 
 #### Added
@@ -37,6 +54,18 @@ All notable user-visible changes are listed here. The format follows [Keep a Cha
 ---
 
 ## 中文摘要(未发布)
+
+### M2 · 工具与文件(进行中)
+
+- **工具框架与审批**(ADR 0010):
+  - 每个工具有风险级别(只读 / 写入 / 对外发送 / 危险),决定是直接执行还是需要你批准;
+  - 审批请求会保存,30 分钟后过期;
+  - 批准时可以选「本会话内总是允许」或「总是允许」(对外发送与危险工具除外);
+  - 预授权在设置中可以查看和撤销;
+  - 任何会话的待审批操作都会显示在 Web UI 顶部的面板中;
+  - 本机审计日志(Web UI → 审计)记录写入、对外发送、被拒绝的调用与预授权变化,入参已脱敏。
+- 新端点 `GET /tools`、`GET /approvals`、`GET` / `DELETE /preauthorizations`、`GET /audit`;`POST /approvals/{callId}` 可带 `remember`。
+- 服务器重启时尚未处理的审批请求会过期,不再悄悄丢失。
 
 ### M1 · 对话核心(2026-11-04)
 
