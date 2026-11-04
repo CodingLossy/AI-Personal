@@ -78,3 +78,50 @@ CREATE INDEX idx_mem_lookup ON memory_facts(owner_id, status, mem_type);
 - 工具:`memory.save`(每次都需要用户审批,来源固定为当前会话)与 `memory.search`(只读)。审批端点 `POST /api/v1/approvals/{callId}`;等待审批时运行状态为 `waiting_approval`,取消运行即视为拒绝。
 - REST:`GET/POST /api/v1/memory`、`POST /api/v1/memory/search`、`GET/PATCH/DELETE /api/v1/memory/{id}`;用户经 REST 写入的记忆 `origin = user_explicit`,无需审批。
 - 上下文压缩:最近原文不超过上下文窗口的 40%(至少 2 条),更早的消息用 cheap 配置档(没有则用 chat)压缩成摘要段存入 `session_summaries`;压缩失败时丢弃最旧的消息,运行照常进行。
+
+## 5. M2 落地细节(M2 PR 10 起)
+
+本节写入 M2 方案第 6 节的业主决定(2026-11-04 全部按建议),以及 M2 实现时对补充设计的进一步调整。实现仍然只依据补充设计与本 ADR(第 0 节)。
+
+### 5.1 业主决定
+
+| 问题                  | 决定                                                                                                                                                                                          |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| sleep 整理            | 推迟到 M6,与通用定时任务一起做。M2 只做不调 LLM 的 decay / tier / expire;hygiene / optimize 推迟(M2 方案第 7 节)                                                                              |
+| 自动抽取              | 默认关(`settings.memory.autoExtract = false`);打开后每天最多 200 次 cheap 模型调用,只看用户消息与最终回答,不看工具输出                                                                        |
+| 预算                  | digest ≤ 400 tokens 且最多 15 条;每轮记忆块 ≤ 1,200 tokens 且不超过模型上下文的 10%,每条 ≤ 80 tokens;设置中可调(digest 100–1,000,记忆块 200–4,000);token 用按字符的保守估算                   |
+| `memory.write` 的审批 | 有条件预授权:本轮输入来自主人的直接消息、`sensitivity = 0`、不更替已有的单值画像事实时直接写入并显示可撤销提示;其余情况需要审批。设置中提供「每次都要审批」开关(ADR 0010 第 4 节的条件预授权) |
+| 维护任务的调度器      | 用 `croner`(MIT,无依赖);加入前按惯例测 import 后的内存                                                                                                                                        |
+| 两次自检              | M2a(PR 1–9)已完成;M2b 为 PR 10–15                                                                                                                                                             |
+
+### 5.2 对补充设计的调整
+
+1. **向量不另建 `memory_vec`**:记忆的向量放进 ADR 0014 的统一表(`embeddings` / `embedding_vec`),以 `(item_id, chunk = 0)` 对应。因此 `memory_facts` **不加** `vec_rowid` 与 `embed_model` 两列,也不需要 `trg_memvec_cleanup`:`items` 硬删除时,外键级联删除 `embeddings`,ADR 0014 的触发器删除向量行。换嵌入模型时的重建也走 ADR 0014 第 4 节。
+2. **迁移编号**:补充设计与 M2 方案写的「迁移 0003」已被授权目录占用,记忆 v2 的迁移是 **0007**。
+3. **导航树**的类别都是 `source = 'memory'` 的 `category` 条目,用 `source_ref` 识别:
+   - 根「记忆」:`memory`;
+   - 域:`memory:<domain>`,标题为「工作 / 生活 / 通用」;
+   - 类型:`memory:<domain>:<group>`,`group` 为 `semantic`(事实)、`episodic`(经历)、`procedural`(方法)或 `decision`(决策,即 `subtype = 'decision'` 的记忆);
+   - 历史版本:`memory:<domain>:<group>:history`,`meta.hidden = true`。
+     类别按需创建:只有用到的域与类型才建。被更替(`superseded`)的记忆改挂到同类型下的「历史版本」。计数沿 primary `contains` 边统计,包括历史版本(隐藏只影响默认视图,由 PR 14 的 ItemProvider 与 UI 处理)。
+4. **更替**:先把旧记录标为 `superseded` 再插入新记录(第 2 节第 3 条);新记录的 `supersedes_id` 指向旧记录,并建一条非 primary 的 `supersedes` 边(新 → 旧)。
+5. **硬删除(忘记)**:删除 `items` 行之前,先把它从导航树上摘下,沿祖先链扣减计数;其余由外键级联完成(来源、反馈、冲突、嵌入与向量)。
+6. **新增的列**(只用 `ADD COLUMN`):`supersedes_id`、`decision_state`、`tier`、`importance`、`decay_score`、`pinned`、`valid_from`、`valid_to`、`last_confirmed_at`、`last_accessed_at`、`access_count`、`helpful_count`、`stale_count`、`wrong_count`;`idx_mem_lookup` 改为 `(owner_id, status, tier, mem_type)`。
+7. **新表**:`memory_conflicts`、`memory_feedback`、`memory_quarantine`、`memory_digest`、`jobs_state`(维护任务的上次 / 下次运行时间与游标,每个 owner、每个任务一行)。带 `owner_id` 的表都以外键级联到 `owners`。
+
+### 5.3 v1 → v2 数据迁移
+
+迁移 0007 先执行 SQL(加列、建表、换索引),再在同一个事务中执行一段数据迁移(`Migration.data`,与 SQL 一样发布后不得修改):
+
+- 已有记忆:`tier = 'active'`、`decay_score = 1`、`last_confirmed_at = updated_at`;
+- 为每个 owner 建导航树,把每条记忆挂到它的类型或历史版本类别下,然后用递归 CTE 重算这棵树的计数;
+- 推断更替链:同一 owner、同一单值 `entity_key` 的记录按 `created_at` 排序,每条 `superseded` 记录由紧随其后的那一条更替,补 `supersedes_id` 与 `supersedes` 边。
+
+迁移前自动备份(ADR 0005);迁移前后记忆条数与正文不变,有测试覆盖(用 M1 格式的数据库)。
+
+### 5.4 契约(`packages/shared`)
+
+- 新类型:`Tier`、`TrustQualifier`、`MemoryWriteInput` / `MemoryWriteResult`、`MemoryRetrieveInput` / `MemoryRetrieveResult`、`RetrievedMemory`、`MemoryDigest`、`MemoryFeedbackInput`、`ItemRel`(`contains`、`mentions`、`derived`、`supersedes`、`forked_from`)。
+- `Memory` 增加 `tier`、`importance`、`pinned`、`supersedesId`、`lastConfirmedAt`(响应中的新增字段,向后兼容)。
+- 新的 AgentEvent `memory-used { runId, ids }`(PR 12 起发送;客户端须忽略未知事件,ADR 0004)。
+- 兼容:`memory.save` / `memory.search` 保留为 `memory.write` / `memory.retrieve` 的别名;`POST /memory/search` 与 `recall()`(#13)行为不变。`MemorySaveInput` / `MemorySaveResult` 保留,`MemoryWriteInput` 在其基础上增加字段。
