@@ -17,6 +17,8 @@ export interface ItemServiceOptions {
     providers?: ItemProvider[];
     now?: () => number;
     onError?: (error: unknown, context: { provider: string }) => void;
+    /** 每次同步结束后调用(例如在后台更新知识库,ADR 0015)。 */
+    onSynced?: (ownerId: string) => void;
 }
 
 export function createItemService(options: ItemServiceOptions) {
@@ -46,6 +48,7 @@ export function createItemService(options: ItemServiceOptions) {
             }
         }
         lastSync.set(ownerId, now());
+        options.onSynced?.(ownerId);
     }
 
     /** 同一 owner 同时只运行一次同步;正在同步时等待它结束。 */

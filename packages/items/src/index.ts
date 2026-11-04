@@ -7,5 +7,17 @@ export { decodeText, novelsProvider, NOVELS_ROOT_REF, splitChapters, type Chapte
 export { type ItemProvider, MAX_CONTENT_CHARS, type OpenContext, type SyncContext, textContent } from './provider.js';
 export { createItemService, type ItemService, type ItemServiceOptions, SYNC_INTERVAL_MS } from './service.js';
 export { sessionsProvider, SESSIONS_ROOT_REF } from './sessions.js';
+export {
+    chunkText,
+    createKbTools,
+    createKnowledgeBase,
+    embedText,
+    formatResults,
+    KB_EXTENSIONS,
+    type KbVectors,
+    type KnowledgeBase,
+    type KnowledgeBaseOptions,
+    MAX_CHUNKS_PER_FILE,
+} from './kb/index.js';
 export { createItemTools } from './tools.js';
 export { MAX_DEPTH, MAX_ENTRIES_PER_ROOT, walk, type WalkEntry } from './walk.js';
