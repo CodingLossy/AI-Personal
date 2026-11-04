@@ -41,4 +41,15 @@ export {
     PathError,
     resolveInRoots,
 } from './fs/paths.js';
-export { createFsTools, type FsToolOptions, MAX_READ_BYTES, MAX_WRITE_BYTES } from './fs/tools.js';
+export { createFsTools, type FsToolOptions, MAX_DOCUMENT_CHARS, MAX_READ_BYTES, MAX_WRITE_BYTES } from './fs/tools.js';
+export {
+    documentKind,
+    type DocumentKind,
+    type ExtractedDocument,
+    extractDocument,
+    extractDocx,
+    extractPdf,
+    extractXlsx,
+} from './docs/extract.js';
+export { MAX_DOCUMENT_BYTES, parseInWorker } from './docs/parse.js';
+export { DocumentError, ZipReader } from './docs/zip.js';
