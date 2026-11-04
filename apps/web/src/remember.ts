@@ -15,6 +15,13 @@ export function canRemember(risk: ToolRisk | undefined): boolean {
  */
 export function rememberConstraint(info: ToolInfo | undefined, input: unknown): PreauthConstraint | null | undefined {
     if (!info) return undefined;
+    if (info.constraints.includes('pathPrefix')) {
+        // 文件工具按目录预授权:取目标所在的文件夹,服务器会 realpath 后再保存(ADR 0011 第 4 节)
+        const args = input as { path?: unknown; to?: unknown } | null;
+        const target = typeof args?.to === 'string' ? args.to : typeof args?.path === 'string' ? args.path : '';
+        const folder = parentFolder(target);
+        if (folder) return { pathPrefix: folder };
+    }
     if (info.constraints.includes('domain')) {
         const url = (input as { url?: unknown } | null)?.url;
         try {
@@ -25,4 +32,15 @@ export function rememberConstraint(info: ToolInfo | undefined, input: unknown): 
         }
     }
     return info.requiredConstraint ? null : undefined;
+}
+
+/** 去掉最后一段得到所在文件夹(浏览器里没有 path 模块);没有上级时返回空串。 */
+export function parentFolder(target: string): string {
+    const trimmed = target.replace(/[\\/]+$/, '');
+    const i = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
+    if (i < 0) return '';
+    const folder = trimmed.slice(0, i);
+    // C:\file.txt 的上级是 C:\;/file 的上级是 /
+    if (folder === '' || /^[a-z]:$/i.test(folder)) return trimmed.slice(0, i + 1);
+    return folder;
 }

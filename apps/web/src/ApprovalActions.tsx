@@ -52,7 +52,11 @@ export function ApprovalActions({
 
     const constraint = rememberConstraint(info, input);
     const rememberable = canRemember(risk) && constraint !== null;
-    const scope = constraint?.domain ? ` (${constraint.domain})` : '';
+    const scope = constraint?.domain
+        ? ` (${constraint.domain})`
+        : constraint?.pathPrefix
+          ? ` (${constraint.pathPrefix})`
+          : '';
 
     const decide = async (decision: 'approve' | 'reject') => {
         setBusy(true);
