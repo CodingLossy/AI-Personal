@@ -4,13 +4,15 @@
 // 极简路由(ADR 0009 第 2 节):History API + popstate;服务器对未知路径回退到 index.html。
 import { useEffect, useState } from 'react';
 
-export type Route = { name: 'home' } | { name: 'session'; id: string } | { name: 'settings' } | { name: 'memory' };
+export type Route =
+    { name: 'home' } | { name: 'session'; id: string } | { name: 'settings' } | { name: 'memory' } | { name: 'audit' };
 
 export function parseRoute(path: string): Route {
     const session = /^\/s\/([0-9A-Za-z]+)\/?$/.exec(path);
     if (session) return { name: 'session', id: session[1]! };
     if (path === '/settings') return { name: 'settings' };
     if (path === '/memory') return { name: 'memory' };
+    if (path === '/audit') return { name: 'audit' };
     return { name: 'home' };
 }
 

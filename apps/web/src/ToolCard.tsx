@@ -1,32 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 尹绪柏 (Theodore Yin)
 
-import { useState } from 'react';
-import { api, errorText } from './api.js';
+import { ApprovalActions } from './ApprovalActions.js';
 import { useI18n } from './i18n.js';
 import type { LiveTool } from './live-turn.js';
 
-function show(value: unknown): string {
+export function show(value: unknown): string {
     return typeof value === 'string' ? value : JSON.stringify(value, null, 2);
 }
 
-/** 工具调用卡片;等待审批时只有「批准」「拒绝」两个按钮(ADR 0009 第 4 节)。 */
+/**
+ * 工具调用卡片;等待审批时显示「批准」「拒绝」与「记住」选项(ADR 0009 第 4 节、ADR 0010 第 3 节)。
+ * 摘要与入参来自模型,一律按纯文本显示。
+ */
 export function ToolCard({ tool, live = false }: { tool: LiveTool; live?: boolean }) {
     const { t } = useI18n();
-    const [busy, setBusy] = useState(false);
-    const [error, setError] = useState<string | null>(null);
     const pending = live && tool.approval && !tool.approval.decision;
-
-    const decide = async (decision: 'approve' | 'reject') => {
-        setBusy(true);
-        setError(null);
-        try {
-            await api.approvals.decide(tool.callId, decision);
-        } catch (e) {
-            setError(errorText(e));
-            setBusy(false);
-        }
-    };
+    const resolved = tool.approval?.decision;
 
     return (
         <div className={`tool-card${pending ? ' pending' : ''}`} data-call-id={tool.callId}>
@@ -37,21 +27,16 @@ export function ToolCard({ tool, live = false }: { tool: LiveTool; live?: boolea
                 <pre>{show(tool.input)}</pre>
             </details>
             {pending ? (
-                <div className="approval">
-                    <span className="small">{t('tool.approvalNeeded')}</span>
-                    <button type="button" className="primary" disabled={busy} onClick={() => void decide('approve')}>
-                        {t('tool.approve')}
-                    </button>
-                    <button type="button" className="danger" disabled={busy} onClick={() => void decide('reject')}>
-                        {t('tool.reject')}
-                    </button>
-                </div>
-            ) : tool.approval?.decision ? (
+                <ApprovalActions callId={tool.callId} risk={tool.approval?.risk} />
+            ) : resolved ? (
                 <p className="small decision">
-                    {tool.approval.decision === 'approve' ? t('tool.approved') : t('tool.rejected')}
+                    {tool.approval?.reason === 'expired'
+                        ? t('tool.expired')
+                        : resolved === 'approve'
+                          ? t('tool.approved')
+                          : t('tool.rejected')}
                 </p>
             ) : null}
-            {error ? <p className="error small">{error}</p> : null}
             {tool.result ? (
                 tool.result.error ? (
                     <p className="error small">{t('tool.error', { msg: tool.result.error })}</p>

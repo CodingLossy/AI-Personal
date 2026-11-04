@@ -4,6 +4,7 @@
 export { EventBus, type EventListener } from './bus.js';
 export { estimateTokens, planContext, SUMMARY_PREFIX, transcript } from './context.js';
 export {
+    DEFAULT_APPROVAL_TIMEOUT_MS,
     MAX_TOOL_STEPS,
     RunConflictError,
     RunManager,
@@ -12,4 +13,4 @@ export {
     type StartRunInput,
     SYSTEM_PROMPT,
 } from './runner.js';
-export { type AgentTool, type ToolContext, toolSpecs } from './tools.js';
+export type { AgentTool, ApprovalOutcome, ToolContext, ToolDefinition } from './tools.js';

@@ -10,7 +10,7 @@ import { EventBus, RunManager } from '@ai-personal/agent';
 import { createMemoryService } from '@ai-personal/memory';
 import { createProvider, type ModelProvider, Redactor, SecretStore } from '@ai-personal/providers';
 import { createRepositories, openStorage, type Repositories } from '@ai-personal/storage';
-import { createMemoryTools, createSummarizer } from './agent-setup.js';
+import { createSummarizer, createToolRegistry } from './agent-setup.js';
 import { createApp, type AppDeps } from './app.js';
 import { FailureLimiter } from './auth/rate-limit.js';
 import { createLogger } from './log.js';
@@ -39,6 +39,8 @@ export interface TestServerOptions {
     env?: NodeJS.ProcessEnv;
     /** 替换模型 provider(对话运行测试用)。 */
     provider?: ModelProvider;
+    /** 审批请求的有效期(审批过期测试用)。 */
+    approvalTimeoutMs?: number;
 }
 
 export async function createTestServer(
@@ -72,7 +74,9 @@ export async function createTestServer(
         bus,
         persistIntervalMs: 0,
         providerFor,
-        tools: createMemoryTools(memory),
+        tools: createToolRegistry(memory),
+        redact: (text) => redactor.redact(text),
+        ...(options.approvalTimeoutMs ? { approvalTimeoutMs: options.approvalTimeoutMs } : {}),
         summarize: createSummarizer(repos, providerFor),
     });
     const app = createApp({
@@ -88,6 +92,7 @@ export async function createTestServer(
         secrets,
         providerDeps,
         bus,
+        redact: (text) => redactor.redact(text),
         runs,
         memory,
         clientIp: (c) => c.req.header('x-test-ip') ?? '127.0.0.1',

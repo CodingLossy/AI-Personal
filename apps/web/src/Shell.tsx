@@ -4,6 +4,8 @@
 import type { Session, Settings } from '@ai-personal/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { api } from './api.js';
+import { ApprovalPanel } from './ApprovalPanel.js';
+import { AuditPage } from './AuditPage.js';
 import { ChatView } from './ChatView.js';
 import { useI18n } from './i18n.js';
 import { MemoryPage } from './MemoryPage.js';
@@ -83,6 +85,9 @@ export function Shell({
                     <Link to={{ name: 'memory' }} className={route.name === 'memory' ? 'active' : ''}>
                         {t('nav.memory')}
                     </Link>
+                    <Link to={{ name: 'audit' }} className={route.name === 'audit' ? 'active' : ''}>
+                        {t('nav.audit')}
+                    </Link>
                     <Link to={{ name: 'settings' }} className={route.name === 'settings' ? 'active' : ''}>
                         {t('nav.settings')}
                     </Link>
@@ -92,10 +97,13 @@ export function Shell({
                 </div>
             </aside>
             <main className="content">
+                <ApprovalPanel currentSessionId={activeId} />
                 {route.name === 'settings' ? (
                     <SettingsPage settings={settings} onSettings={onSettings} />
                 ) : route.name === 'memory' ? (
                     <MemoryPage />
+                ) : route.name === 'audit' ? (
+                    <AuditPage />
                 ) : (
                     <ChatView key={activeId ?? 'new'} sessionId={activeId} onSessionsChanged={reloadSessions} />
                 )}

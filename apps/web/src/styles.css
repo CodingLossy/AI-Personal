@@ -413,6 +413,47 @@ fieldset {
     color: inherit;
 }
 
+.approval-panel {
+    border-bottom: 1px solid var(--warn);
+    background: var(--panel);
+    padding: 0.5rem 1rem;
+}
+
+.approval-panel .list {
+    margin: 0.5rem 0 0;
+}
+
+.risk-read {
+    color: var(--muted);
+}
+
+.risk-write {
+    color: var(--warn);
+}
+
+.risk-external,
+.risk-dangerous {
+    color: var(--danger);
+}
+
+.badge + .badge,
+td .badge {
+    margin-left: 0.4rem;
+}
+
+.audit-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.audit-table th,
+.audit-table td {
+    text-align: left;
+    vertical-align: top;
+    padding: 0.35rem 0.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
 @media (max-width: 720px) {
     .shell {
         flex-direction: column;

@@ -1,12 +1,30 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 尹绪柏 (Theodore Yin)
 
-import type { AgentEvent, Message, MessagePart, ProblemDetails, Usage } from '@ai-personal/shared';
+import type {
+    AgentEvent,
+    AuditEntry,
+    Message,
+    MessagePart,
+    PreauthRemember,
+    ProblemDetails,
+    Usage,
+} from '@ai-personal/shared';
 import { type ChatMessage, type ModelProvider, ProviderError, type ToolCall } from '@ai-personal/providers';
 import { type ModelProfileRecord, newId, type Repositories } from '@ai-personal/storage';
 import type { EventBus } from './bus.js';
 import { DEFAULT_CONTEXT_WINDOW, planContext, SUMMARY_PREFIX, textOf, toChatMessage, transcript } from './context.js';
-import { type AgentTool, toolSpecs } from './tools.js';
+import {
+    checkRemember,
+    decide,
+    inputDigest,
+    isPreauthorizable,
+    redactedInput,
+    type ToolContext,
+    type ToolDefinition,
+    type ToolRegistry,
+} from '@ai-personal/tools';
+import type { ApprovalOutcome } from './tools.js';
 
 export interface RunManagerOptions {
     repos: Repositories;
@@ -17,8 +35,14 @@ export interface RunManagerOptions {
     persistIntervalMs?: number;
     now?: () => number;
     onError?: (error: unknown, context: { runId: string }) => void;
-    /** 交给模型的工具;为空时不发送 tools,也不加系统提示。 */
-    tools?: readonly AgentTool[];
+    /** 交给模型的工具;为空时不发送 tools,也不加系统提示(ADR 0010)。 */
+    tools?: ToolRegistry;
+    /** 审批请求的有效期,默认 30 分钟;过期按拒绝处理。 */
+    approvalTimeoutMs?: number;
+    /** 审批请求与审计中的入参脱敏(通常是 providers 的 Redactor);默认不做替换。 */
+    redact?: (text: string) => string;
+    /** 设置中「每次都要审批」:关闭条件预授权。 */
+    disableConditional?: (ownerId: string) => boolean;
     /** 压缩旧消息的摘要函数(通常用 cheap 配置档);未提供或失败时直接丢弃最旧的消息。 */
     summarize?: (ownerId: string, transcript: string, signal: AbortSignal) => Promise<string>;
 }
@@ -63,6 +87,9 @@ export class RunConflictError extends Error {
 const TITLE_LENGTH = 40;
 
 type Decision = 'approve' | 'reject';
+type Resolution = { decision: Decision; reason: 'user' | 'expired' | 'cancelled' };
+
+export const DEFAULT_APPROVAL_TIMEOUT_MS = 30 * 60 * 1000;
 
 /**
  * 运行管理:运行与 HTTP 连接解耦,客户端断开不会中断运行,只有 cancel 会(ADR 0004 第 5 节)。
@@ -70,7 +97,8 @@ type Decision = 'approve' | 'reject';
  */
 export class RunManager {
     private readonly active = new Map<string, { controller: AbortController; done: Promise<void> }>();
-    private readonly approvals = new Map<string, { ownerId: string; resolve: (d: Decision) => void }>();
+    /** 正在等待审批的运行;审批状态本身以 approval_requests 表为准(ADR 0010 第 5 节)。 */
+    private readonly approvals = new Map<string, { ownerId: string; resolve: (r: Resolution) => void }>();
     private readonly persistIntervalMs: number;
     private readonly now: () => number;
 
@@ -148,34 +176,95 @@ export class RunManager {
         await entry.done;
     }
 
-    /** 处理审批;callId 不存在或已处理时返回 false。 */
-    resolveApproval(ownerId: string, callId: string, decision: Decision): boolean {
+    /**
+     * 处理审批。只有 pending 的请求能被决定,多端同时审批时只有第一个生效(条件更新,ADR 0010 第 5 节)。
+     * remember 只能在批准时使用,external / dangerous 工具不允许预授权。
+     */
+    resolveApproval(ownerId: string, callId: string, decision: Decision, remember?: PreauthRemember): ApprovalOutcome {
+        const { repos } = this.options;
         const pending = this.approvals.get(callId);
-        if (!pending || pending.ownerId !== ownerId) return false;
+        const request = repos.approvals.get(ownerId, callId);
+        if (!pending || pending.ownerId !== ownerId || !request || request.status !== 'pending') return 'not_pending';
+        if (remember) {
+            if (decision !== 'approve') return { invalid: 'remember is only allowed when approving' };
+            const tool = this.options.tools?.get(request.toolName);
+            const problem = tool ? checkRemember(tool, remember) : 'the tool is no longer available';
+            if (problem) return { invalid: problem };
+        }
+        if (!repos.approvals.decide(ownerId, callId, decision === 'approve' ? 'approved' : 'rejected')) {
+            return 'not_pending';
+        }
+        if (remember) {
+            const preauth = repos.preauths.create(ownerId, {
+                toolName: request.toolName,
+                scope: remember.scope,
+                sessionId: request.sessionId,
+                constraint: remember.constraint ?? null,
+            });
+            this.audit(ownerId, {
+                action: 'preauth-created',
+                toolName: request.toolName,
+                risk: request.risk,
+                callId,
+                runId: request.runId,
+                sessionId: request.sessionId,
+                decision: null,
+                outcome: 'ok',
+                summary: `Pre-authorized ${request.toolName} (${preauth.scope})`,
+                inputDigest: preauth.constraint ? inputDigest(preauth.constraint, this.redact) : null,
+                error: null,
+            });
+        }
         this.approvals.delete(callId);
-        pending.resolve(decision);
-        return true;
+        pending.resolve({ decision, reason: 'user' });
+        return 'resolved';
     }
 
-    private waitForApproval(ownerId: string, callId: string, signal: AbortSignal): Promise<Decision> {
+    private get redact(): (text: string) => string {
+        return this.options.redact ?? ((text) => text);
+    }
+
+    private audit(ownerId: string, entry: Omit<AuditEntry, 'id' | 'at'>): void {
+        this.options.repos.audit.append(ownerId, entry);
+    }
+
+    /** 等待用户决定;到期时把请求标为 expired,运行取消时标为 cancelled,两者都按拒绝处理。 */
+    private waitForApproval(
+        ownerId: string,
+        callId: string,
+        signal: AbortSignal,
+        expiresInMs: number,
+    ): Promise<Resolution> {
+        const { repos } = this.options;
         return new Promise((resolve) => {
-            const onAbort = () => {
-                this.approvals.delete(callId);
-                resolve('reject');
-            };
             if (signal.aborted) {
-                onAbort();
+                repos.approvals.decide(ownerId, callId, 'cancelled');
+                resolve({ decision: 'reject', reason: 'cancelled' });
                 return;
             }
+            const timer = setTimeout(() => {
+                if (repos.approvals.decide(ownerId, callId, 'expired')) {
+                    settle({ decision: 'reject', reason: 'expired' });
+                }
+            }, expiresInMs);
+            const onAbort = () => {
+                repos.approvals.decide(ownerId, callId, 'cancelled');
+                settle({ decision: 'reject', reason: 'cancelled' });
+            };
+            const settle = (r: Resolution) => {
+                clearTimeout(timer);
+                signal.removeEventListener('abort', onAbort);
+                this.approvals.delete(callId);
+                resolve(r);
+            };
             signal.addEventListener('abort', onAbort, { once: true });
-            this.approvals.set(callId, {
-                ownerId,
-                resolve: (d) => {
-                    signal.removeEventListener('abort', onAbort);
-                    resolve(d);
-                },
-            });
+            this.approvals.set(callId, { ownerId, resolve: settle });
         });
+    }
+
+    /** 注册的工具(GET /api/v1/tools 用)。 */
+    get tools(): ToolRegistry | undefined {
+        return this.options.tools;
     }
 
     isActive(runId: string): boolean {
@@ -197,6 +286,8 @@ export class RunManager {
             this.emit(run.ownerId, run.sessionId, run.id, { type: 'run-failed', runId: run.id, error });
         }
         repos.interruptStreamingMessages();
+        // 重启后不恢复执行待审批的调用:模型调用的上下文已经不在内存中(ADR 0010 第 5 节)
+        repos.approvals.expireAllPending();
         return unfinished.length;
     }
 
@@ -216,6 +307,48 @@ export class RunManager {
             requestId: runId,
             ...(providerCode ? { providerCode } : {}),
         };
+    }
+
+    private decideCall(tool: ToolDefinition, input: unknown, context: ToolContext) {
+        const preauths = this.options.repos.preauths.forTool(context.ownerId, tool.name, context.sessionId);
+        return decide(tool, input, context, preauths, {
+            enableDangerous: this.options.tools?.options.enableDangerous,
+            disableConditional: this.options.disableConditional?.(context.ownerId),
+        });
+    }
+
+    private auditCall(
+        ownerId: string,
+        sessionId: string,
+        runId: string,
+        callId: string,
+        call: ToolCall,
+        tool: ToolDefinition | null,
+        decision: NonNullable<AuditEntry['decision']>,
+        outcome: AuditEntry['outcome'],
+        error?: string,
+    ): void {
+        let summary = call.name;
+        if (tool) {
+            try {
+                summary = tool.summarize(call.input);
+            } catch {
+                summary = tool.name;
+            }
+        }
+        this.audit(ownerId, {
+            action: 'tool-call',
+            toolName: call.name,
+            risk: tool?.risk ?? null,
+            callId,
+            runId,
+            sessionId,
+            decision,
+            outcome,
+            summary: summary.slice(0, 500),
+            inputDigest: inputDigest(call.input, this.redact),
+            error: error ? this.redact(error).slice(0, 2000) : null,
+        });
     }
 
     /**
@@ -255,7 +388,7 @@ export class RunManager {
             }
         }
         const out: ChatMessage[] = [];
-        if (this.options.tools?.length) out.push({ role: 'system', content: SYSTEM_PROMPT });
+        if (this.options.tools?.size) out.push({ role: 'system', content: SYSTEM_PROMPT });
         if (summaries.length > 0) {
             out.push({
                 role: 'system',
@@ -274,7 +407,16 @@ export class RunManager {
         const { repos } = this.options;
         const { ownerId, sessionId } = input;
         const emit = (event: AgentEvent) => this.emit(ownerId, sessionId, run.runId, event);
-        const tools = this.options.tools ?? [];
+        const tools = this.options.tools;
+        let untrustedContentSeen = false;
+        const toolContext = (): ToolContext => ({
+            ownerId,
+            sessionId,
+            runId: run.runId,
+            userMessageId: run.userMessageId,
+            assistantMessageId: run.assistantMessageId,
+            untrustedContentSeen,
+        });
 
         emit({
             type: 'run-started',
@@ -314,7 +456,7 @@ export class RunManager {
                 let stepText = '';
                 let reason: string | null = null;
                 let usage: Usage | undefined;
-                const specs = tools.length > 0 && step < MAX_TOOL_STEPS ? toolSpecs(tools) : undefined;
+                const specs = tools && tools.size > 0 && step < MAX_TOOL_STEPS ? tools.specs() : undefined;
                 for await (const chunk of provider.stream({ messages, signal, ...(specs ? { tools: specs } : {}) })) {
                     if (chunk.type === 'text-delta') {
                         stepText += chunk.delta;
@@ -338,7 +480,7 @@ export class RunManager {
                 for (const call of calls) {
                     // 对外的 callId 由服务器生成,保证全局唯一;模型侧的 id 只用于回填工具结果
                     const callId = newId();
-                    const tool = tools.find((t) => t.name === call.name);
+                    const tool = tools?.get(call.name);
                     emit({ type: 'tool-call', runId: run.runId, callId, name: call.name, input: call.input });
                     parts.push({ type: 'tool-call', callId, name: call.name, input: call.input });
 
@@ -346,37 +488,101 @@ export class RunManager {
                     let error: string | undefined;
                     if (!tool) {
                         error = `unknown tool: ${call.name}`;
+                        this.auditCall(ownerId, sessionId, run.runId, callId, call, null, 'denied', 'not_run', error);
                     } else {
-                        let approved = true;
-                        if (tool.requiresApproval) {
+                        const verdict = this.decideCall(tool, call.input, toolContext());
+                        let auditDecision: NonNullable<AuditEntry['decision']>;
+                        let approved = verdict.action === 'run';
+                        if (verdict.action === 'deny') {
+                            error = verdict.reason;
+                            auditDecision = 'denied';
+                        } else if (verdict.action === 'run') {
+                            auditDecision = verdict.decision;
+                            if (verdict.preauthId) repos.preauths.touch(verdict.preauthId);
+                        } else {
+                            const timeout = this.options.approvalTimeoutMs ?? DEFAULT_APPROVAL_TIMEOUT_MS;
+                            const expiresAt = new Date(this.now() + timeout);
+                            const summary = tool.summarize(call.input);
+                            repos.approvals.create(ownerId, {
+                                callId,
+                                runId: run.runId,
+                                sessionId,
+                                toolName: tool.name,
+                                risk: tool.risk,
+                                summary,
+                                input: redactedInput(call.input, this.redact),
+                                preauthorizable: isPreauthorizable(tool),
+                                expiresAt,
+                            });
                             repos.runs.setStatus(run.runId, 'waiting_approval');
                             persist('streaming');
                             emit({
                                 type: 'approval-required',
                                 runId: run.runId,
                                 callId,
-                                summary: tool.summarize(call.input),
+                                summary,
+                                toolName: tool.name,
+                                risk: tool.risk,
+                                expiresAt: expiresAt.toISOString(),
                             });
-                            const decision = await this.waitForApproval(ownerId, callId, signal);
-                            if (signal.aborted) return finish('cancelled', usage);
-                            emit({ type: 'approval-resolved', runId: run.runId, callId, decision });
+                            const resolution = await this.waitForApproval(ownerId, callId, signal, timeout);
+                            if (signal.aborted) {
+                                this.auditCall(
+                                    ownerId,
+                                    sessionId,
+                                    run.runId,
+                                    callId,
+                                    call,
+                                    tool,
+                                    'cancelled',
+                                    'not_run',
+                                );
+                                return finish('cancelled', usage);
+                            }
+                            emit({
+                                type: 'approval-resolved',
+                                runId: run.runId,
+                                callId,
+                                decision: resolution.decision,
+                                reason: resolution.reason,
+                            });
                             repos.runs.setStatus(run.runId, 'running');
-                            approved = decision === 'approve';
-                            if (!approved) error = 'the user rejected this action';
+                            approved = resolution.decision === 'approve';
+                            auditDecision = approved
+                                ? 'approved'
+                                : resolution.reason === 'expired'
+                                  ? 'expired'
+                                  : 'rejected';
+                            if (!approved) {
+                                error =
+                                    resolution.reason === 'expired'
+                                        ? 'the approval request expired'
+                                        : 'the user rejected this action';
+                            }
                         }
                         if (approved) {
                             emit({ type: 'assistant-state', state: 'executing', toolName: tool.name });
                             try {
-                                output = await tool.execute(call.input, {
-                                    ownerId,
-                                    sessionId,
-                                    runId: run.runId,
-                                    userMessageId: run.userMessageId,
-                                    assistantMessageId: run.assistantMessageId,
-                                });
+                                output = await tool.execute(call.input, toolContext());
                             } catch (e) {
                                 error = e instanceof Error ? e.message : String(e);
                             }
+                            if (tool.untrustedOutput) untrustedContentSeen = true;
+                        }
+                        // read 工具的普通调用不审计;经过审批流程或被拒绝的调用都审计(ADR 0010 第 6 节)
+                        if (tool.risk !== 'read' || auditDecision !== 'auto') {
+                            const outcome = !approved ? 'not_run' : error === undefined ? 'ok' : 'error';
+                            this.auditCall(
+                                ownerId,
+                                sessionId,
+                                run.runId,
+                                callId,
+                                call,
+                                tool,
+                                auditDecision,
+                                outcome,
+                                error,
+                            );
                         }
                     }
                     const result = error === undefined ? {} : { error };

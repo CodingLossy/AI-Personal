@@ -1,0 +1,45 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 尹绪柏 (Theodore Yin)
+
+import type { PreauthConstraintKind, ToolRisk } from '@ai-personal/shared';
+
+/** 工具执行时由 core 提供的上下文;其中的事实都来自 core,不来自模型。 */
+export interface ToolContext {
+    ownerId: string;
+    sessionId: string;
+    runId: string;
+    userMessageId: string;
+    assistantMessageId: string;
+    /**
+     * 本次运行中是否已有工具返回过外部(不可信)内容。为 true 时条件预授权一律不成立,
+     * 因为之后的调用可能是被这些内容诱导的(ADR 0010 第 4 节)。
+     */
+    untrustedContentSeen: boolean;
+}
+
+/**
+ * 工具定义(ADR 0010)。风险级别由工具作者或用户配置决定,从不由模型决定。
+ * 输入来自模型:execute 必须自行校验,校验失败时抛错,错误信息会作为工具结果交还模型。
+ */
+export interface ToolDefinition {
+    /** 内置工具如 fs.read;MCP 工具为 mcp.<server>.<tool>。 */
+    name: string;
+    description: string;
+    /** 交给模型的 JSON Schema。 */
+    parameters: Record<string, unknown>;
+    risk: ToolRisk;
+    /** 只能比级别默认值更严:'required' 让 read 工具也需审批(例如 web.fetch)。 */
+    approval?: 'required';
+    source?: 'builtin' | 'mcp';
+    /** MCP 工具所属的服务器名。 */
+    server?: string;
+    /** 输出可能包含外部内容(网页、文件、MCP 输出);执行后本次运行的条件预授权失效。 */
+    untrustedOutput?: boolean;
+    /** 预授权支持的参数约束:从入参中取出规范化的值,取不出时返回 null(此时约束不匹配)。 */
+    constraints?: Partial<Record<PreauthConstraintKind, (input: unknown) => string | null>>;
+    /** 条件预授权:只能依据 core 已知的事实计算(ADR 0010 第 4 节)。 */
+    autoApproveWhen?: (input: unknown, context: ToolContext) => boolean;
+    /** 审批卡片上的一句话说明;输入来自模型,调用方须按不可信的纯文本显示。 */
+    summarize(input: unknown): string;
+    execute(input: unknown, context: ToolContext): Promise<unknown>;
+}

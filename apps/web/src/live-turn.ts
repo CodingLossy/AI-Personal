@@ -2,14 +2,19 @@
 // Copyright (C) 2026 尹绪柏 (Theodore Yin)
 
 // 进行中的一轮对话:把一次运行的事件归并成可渲染的状态(ADR 0009 第 3 节)。纯函数,便于单测。
-import type { EventEnvelope, ProblemDetails } from '@ai-personal/shared';
+import type { EventEnvelope, ProblemDetails, ToolRisk } from '@ai-personal/shared';
 
 export interface LiveTool {
     callId: string;
     name: string;
     input: unknown;
     /** 待审批时的摘要;decision 为空表示仍在等待。 */
-    approval?: { summary: string; decision?: 'approve' | 'reject' };
+    approval?: {
+        summary: string;
+        risk?: ToolRisk;
+        decision?: 'approve' | 'reject';
+        reason?: 'user' | 'expired' | 'cancelled';
+    };
     result?: { output: unknown; error?: string };
 }
 
@@ -44,11 +49,19 @@ export function applyEvent(turn: LiveTurn, envelope: EventEnvelope): LiveTurn {
             if (turn.tools.some((t) => t.callId === e.callId)) return turn;
             return { ...turn, tools: [...turn.tools, { callId: e.callId, name: e.name, input: e.input }] };
         case 'approval-required':
-            return updateTool(turn, e.callId, (t) => ({ ...t, approval: { summary: e.summary } }));
+            return updateTool(turn, e.callId, (t) => ({
+                ...t,
+                approval: { summary: e.summary, ...(e.risk ? { risk: e.risk } : {}) },
+            }));
         case 'approval-resolved':
             return updateTool(turn, e.callId, (t) => ({
                 ...t,
-                approval: { summary: t.approval?.summary ?? '', decision: e.decision },
+                approval: {
+                    ...t.approval,
+                    summary: t.approval?.summary ?? '',
+                    decision: e.decision,
+                    ...(e.reason ? { reason: e.reason } : {}),
+                },
             }));
         case 'tool-result':
             return updateTool(turn, e.callId, (t) => ({
