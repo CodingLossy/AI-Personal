@@ -67,10 +67,9 @@ const AUDIT_COLUMNS = `id, at, action, tool_name AS toolName, risk, call_id AS c
 
 const pageCursor = z.object({ t: z.string(), id: z.string() });
 
-function toApproval(row: ApprovalRow): ApprovalRequest & { ownerId: string } {
+function toApproval(row: ApprovalRow): ApprovalRequest {
     return {
         callId: row.callId,
-        ownerId: row.ownerId,
         runId: row.runId,
         sessionId: row.sessionId,
         toolName: row.toolName,
@@ -219,9 +218,7 @@ export function createToolRepositories(conn: Connection, now: () => Date) {
         },
         get(ownerId: string, callId: string): ApprovalRequest | null {
             const row = q.approvalGet.get(ownerId, callId);
-            if (!row) return null;
-            const { ownerId: _owner, ...approval } = toApproval(row);
-            return approval;
+            return row ? toApproval(row) : null;
         },
         /** 只有 pending 的请求能被决定;返回 false 表示已被处理(竞争中的后到者)或不存在。 */
         decide(ownerId: string, callId: string, status: Exclude<ApprovalStatus, 'pending'>): boolean {
@@ -240,10 +237,7 @@ export function createToolRepositories(conn: Connection, now: () => Date) {
             const rows = after
                 ? q.approvalAfter.all(ownerId, status, status, after.t, after.t, after.id, page.limit + 1)
                 : q.approvalFirst.all(ownerId, status, status, page.limit + 1);
-            const items = rows.slice(0, page.limit).map((r) => {
-                const { ownerId: _owner, ...approval } = toApproval(r);
-                return approval;
-            });
+            const items = rows.slice(0, page.limit).map(toApproval);
             const last = items.at(-1);
             return {
                 items,
