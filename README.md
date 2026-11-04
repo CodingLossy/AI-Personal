@@ -4,7 +4,7 @@
 
 一个真正属于你自己的 AI 助手:可自托管、开源、自带模型(BYO LLM)、本地优先、**零遥测**、插件化(MCP 为一等公民)。
 
-> 当前状态:**M0 · 工程脚手架**。功能尚未可用,开发计划见 [docs/plan/AI-Personal-开发计划.md](docs/plan/AI-Personal-开发计划.md)。
+> 当前状态:**M1 · 对话核心**(预发布,尚未打版本)。能自带模型流式对话、记忆与审批,可用 Web UI / 命令行 / curl;更新记录见 [CHANGELOG.md](CHANGELOG.md),开发计划见 [docs/plan/AI-Personal-开发计划.md](docs/plan/AI-Personal-开发计划.md)。
 
 ## 特性(规划中)
 
@@ -19,35 +19,112 @@
 
 AI-Personal **不包含任何**统计或崩溃上报代码。程序只会连接你配置的模型端点、邮箱、渠道和插件,以及(可关闭的)GitHub Releases 更新检查。
 
-## 快速开始(开发)
+## 快速开始
 
-需要 Node.js 24 LTS(最低 22.12)与 pnpm 10。
+需要 Node.js 24 LTS(最低 22.12)与 pnpm 10(`corepack enable` 即可启用)。M1 可以:接入任意 OpenAI 兼容端点(含 Ollama / DeepSeek / OpenRouter)以及 Anthropic、Gemini 原生接口流式对话,刷新页面后续看进行中的回复,让助手记住你说的事(写入记忆需要你批准),并用 Web UI、命令行或 curl 使用。
+
+### 1. 启动
+
+模型密钥只从环境变量或本地文件读取,不能在页面或 API 里填写明文。
+
+macOS / Linux:
 
 ```bash
 git clone https://github.com/CodingLossy/AI-Personal.git
 cd AI-Personal
 pnpm install
+export DEEPSEEK_API_KEY='<你的密钥>'   # 示例用 DeepSeek;本地 Ollama 不需要密钥
+pnpm dev
+```
+
+Windows(PowerShell):
+
+```powershell
+git clone https://github.com/CodingLossy/AI-Personal.git
+cd AI-Personal
+pnpm install
+$env:DEEPSEEK_API_KEY = '<你的密钥>'
 pnpm dev
 ```
 
 - 核心服务:<http://127.0.0.1:8787/healthz>
-- Web UI:<http://127.0.0.1:5173>
+- Web UI:<http://127.0.0.1:5173>。按提示创建主人账户(1.0 只有一个账户),到「设置 → 模型配置档」添加配置档,密钥引用填 `env:DEEPSEEK_API_KEY`(本地 Ollama 留空),看到「密钥: 已设置」后就可以开始对话。
 
-Docker:
+不想用环境变量时,也可以把密钥写进数据目录(默认 `~/.ai-personal`,Windows 为 `%USERPROFILE%\.ai-personal`)下的 `secrets.yaml`,每行一个 `NAME: value`,配置档里引用 `file:NAME`。文件修改后立即生效,不需要重启。
 
-```bash
-docker compose -f docker/docker-compose.yml up --build
-```
-
-首次启动时需要创建主人账户(1.0 只有一个账户):
+### 2. Docker
 
 ```bash
-curl -X POST http://127.0.0.1:8787/api/v1/auth/setup   -H 'content-type: application/json'   -d '{"username":"owner","password":"至少 12 位的密码"}'
+docker compose -f docker/docker-compose.yml up -d --build
 ```
 
-从本机直连时不需要设置码;从其他机器或经过反向代理初始化时,需要在请求中加上 `"setupCode"`,它打印在服务启动日志里(Docker 中用 `docker logs` 查看)。
+镜像同时托管 Web UI:<http://127.0.0.1:8787>。数据(含 `secrets.yaml`)在 `/data` 卷中,可以这样写入密钥,然后在配置档里引用 `file:DEEPSEEK_API_KEY`:
 
-也可以完全用命令行客户端完成初始化与对话(不需要 Web UI;`pnpm build` 后在 `apps/cli` 中运行,或 `pnpm --filter @ai-personal/cli exec ai-personal …`):
+```bash
+printf 'DEEPSEEK_API_KEY: "%s"\n' '<你的密钥>' | \
+  docker compose -f docker/docker-compose.yml exec -T ai-personal sh -c 'umask 077; cat > /data/secrets.yaml'
+```
+
+默认只监听 127.0.0.1;从其他机器访问请经反向代理并启用 HTTPS。从其他机器或经过反向代理初始化时,需要启动日志里打印的一次性设置码(`docker compose -f docker/docker-compose.yml logs`)。
+
+### 3. 用 curl 完成一次对话(不开 Web UI)
+
+所有功能都在版本化的 `/api/v1` 里,OpenAPI 文档在 `/api/v1/openapi.json`(需要鉴权)。下面的例子先用密码初始化,再换成个人访问令牌,之后的请求都带 `Authorization: Bearer`,不需要 CSRF 令牌。
+
+```bash
+API=http://127.0.0.1:8787/api/v1
+
+# 初始化主人账户(本机直连不需要设置码);会话 Cookie 存进 jar.txt
+curl -s -c jar.txt -X POST $API/auth/setup -H 'content-type: application/json' \
+  -d '{"username":"owner","password":"correct horse battery staple"}' > setup.json
+CSRF=$(sed -E 's/.*"csrfToken":"([^"]+)".*/\1/' setup.json)
+
+# 换取个人访问令牌(明文只返回这一次)
+TOKEN=$(curl -s -b jar.txt -X POST $API/tokens -H "x-csrf-token: $CSRF" -H 'content-type: application/json' \
+  -d '{"name":"curl"}' | sed -E 's/.*"token":"([^"]+)".*/\1/')
+AUTH="authorization: Bearer $TOKEN"
+
+# 添加模型配置档;返回的 keyStatus 为 present 表示服务器读到了密钥
+curl -s -X POST $API/models -H "$AUTH" -H 'content-type: application/json' \
+  -d '{"label":"deepseek","kind":"openai-compatible","baseURL":"https://api.deepseek.com/v1","apiKeyRef":"env:DEEPSEEK_API_KEY","model":"deepseek-chat","purpose":["chat","cheap"]}'
+
+# 新建会话并发送消息;-N 让回复按 SSE 事件流式输出
+SID=$(curl -s -X POST $API/sessions -H "$AUTH" -H 'content-type: application/json' -d '{}' \
+  | sed -E 's/.*"id":"([^"]+)".*/\1/')
+curl -N -X POST $API/sessions/$SID/messages -H "$AUTH" -H 'content-type: application/json' \
+  -d '{"text":"记住:我住在杭州"}'
+```
+
+当事件流里出现 `approval-required`(例如模型想调用 `memory.save` 写入记忆),运行会暂停,等你在另一个终端里批准或拒绝:
+
+```bash
+curl -s -X POST $API/approvals/<callId> -H "$AUTH" -H 'content-type: application/json' -d '{"decision":"approve"}'
+```
+
+断线后可以续看同一次运行:`curl -N $API/runs/<runId>/events -H "$AUTH" -H 'last-event-id: 0'`。
+
+Windows PowerShell 中的同一流程(流式部分用系统自带的 `curl.exe`):
+
+```powershell
+$api = 'http://127.0.0.1:8787/api/v1'
+$s = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+$setup = Invoke-RestMethod -Method Post "$api/auth/setup" -WebSession $s -ContentType 'application/json' `
+    -Body '{"username":"owner","password":"correct horse battery staple"}'
+$tok = Invoke-RestMethod -Method Post "$api/tokens" -WebSession $s -Headers @{ 'X-CSRF-Token' = $setup.csrfToken } `
+    -ContentType 'application/json' -Body '{"name":"powershell"}'
+$h = @{ Authorization = "Bearer $($tok.token)" }
+Invoke-RestMethod -Method Post "$api/models" -Headers $h -ContentType 'application/json' -Body (@{
+    label = 'deepseek'; kind = 'openai-compatible'; baseURL = 'https://api.deepseek.com/v1'
+    apiKeyRef = 'env:DEEPSEEK_API_KEY'; model = 'deepseek-chat'; purpose = @('chat', 'cheap')
+} | ConvertTo-Json)
+$sid = (Invoke-RestMethod -Method Post "$api/sessions" -Headers $h -ContentType 'application/json' -Body '{}').id
+'{"text":"Hello"}' | curl.exe -N -X POST "$api/sessions/$sid/messages" -H "Authorization: Bearer $($tok.token)" `
+    -H 'content-type: application/json' --data-binary '@-'
+```
+
+### 4. 命令行客户端
+
+不需要 Web UI 也能完成初始化与对话(`pnpm build` 后运行 `pnpm --filter @ai-personal/cli exec ai-personal …`,或在 `apps/cli` 中 `node dist/bin.js …`):
 
 ```bash
 ai-personal setup -u owner          # 创建主人账户并保存个人访问令牌(~/.ai-personal/cli.json,权限 0600)
@@ -56,7 +133,11 @@ ai-personal ask "用三句话解释 AGPL 第 13 条"
 ai-personal chat                    # 交互式聊天:/new /model /retry /exit,Ctrl+C 中断当前回复
 ```
 
-密钥只能以 `env:` / `file:` 引用的形式填写,不接受明文。需要审批的工具调用(如 `memory.save`)会在终端里询问,非交互时默认拒绝,除非加 `--approve-tools`。
+Anthropic / Gemini 用 `--kind anthropic` 或 `--kind gemini`(不需要 `--base-url`)。需要审批的工具调用(如 `memory.save`)会在终端里询问,非交互时默认拒绝,除非加 `--approve-tools`。
+
+### 开发
+
+`pnpm lint`、`pnpm typecheck`、`pnpm test`(Vitest)、`pnpm build` 后运行 `pnpm test:e2e`(Playwright 冒烟,首次需 `pnpm --filter @ai-personal/web exec playwright install chromium`)。完整约定见 [AGENTS.md](AGENTS.md),更新记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 参与开发请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
 

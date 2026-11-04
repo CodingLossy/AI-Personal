@@ -4,7 +4,7 @@
 
 An AI assistant that is truly your own: self-hostable, open source, bring-your-own-model (BYO LLM), local-first, **telemetry-free**, and pluggable (MCP is a first-class citizen).
 
-> Status: **M0 · project scaffolding**. Nothing is usable yet; see the development plan (Chinese) at [docs/plan/AI-Personal-开发计划.md](docs/plan/AI-Personal-开发计划.md).
+> Status: **M1 · chat core** (pre-release, not yet versioned). Streamed chat with your own models, memory and approvals, usable from the Web UI, the command line or curl. See [CHANGELOG.md](CHANGELOG.md) for changes and the development plan (Chinese) at [docs/plan/AI-Personal-开发计划.md](docs/plan/AI-Personal-开发计划.md).
 
 ## Features (planned)
 
@@ -19,35 +19,112 @@ An AI assistant that is truly your own: self-hostable, open source, bring-your-o
 
 AI-Personal contains **no** analytics or crash-reporting code. It only connects to the model endpoints, mailboxes, channels and plugins you configure, plus an optional (can be disabled) GitHub Releases update check.
 
-## Quick start (development)
+## Quick start
 
-Requires Node.js 24 LTS (minimum 22.12) and pnpm 10.
+Requires Node.js 24 LTS (minimum 22.12) and pnpm 10 (`corepack enable` provides it). With M1 you can stream chats from any OpenAI-compatible endpoint (including Ollama, DeepSeek and OpenRouter) and from the native Anthropic and Gemini APIs, resume a reply that is still streaming after a page refresh, have the assistant remember things you tell it (saving a memory needs your approval), and use it from the Web UI, the command line or curl.
+
+### 1. Start
+
+Model keys are only read from environment variables or a local file. The Web UI and the API never accept a plaintext key.
+
+macOS / Linux:
 
 ```bash
 git clone https://github.com/CodingLossy/AI-Personal.git
 cd AI-Personal
 pnpm install
+export DEEPSEEK_API_KEY='<your key>'   # DeepSeek as an example; a local Ollama needs no key
+pnpm dev
+```
+
+Windows (PowerShell):
+
+```powershell
+git clone https://github.com/CodingLossy/AI-Personal.git
+cd AI-Personal
+pnpm install
+$env:DEEPSEEK_API_KEY = '<your key>'
 pnpm dev
 ```
 
 - Core server: <http://127.0.0.1:8787/healthz>
-- Web UI: <http://127.0.0.1:5173>
+- Web UI: <http://127.0.0.1:5173>. Create the owner account when asked (1.0 has exactly one account), add a profile under Settings → Model profiles with the key reference `env:DEEPSEEK_API_KEY` (leave it empty for a local Ollama), and start chatting once it shows "Key: Set".
 
-Docker:
+Instead of an environment variable, you can put keys in `secrets.yaml` in the data directory (`~/.ai-personal` by default, `%USERPROFILE%\.ai-personal` on Windows), one `NAME: value` per line, and reference them as `file:NAME`. Changes take effect without a restart.
 
-```bash
-docker compose -f docker/docker-compose.yml up --build
-```
-
-On first start, create the owner account (1.0 has exactly one account):
+### 2. Docker
 
 ```bash
-curl -X POST http://127.0.0.1:8787/api/v1/auth/setup   -H 'content-type: application/json'   -d '{"username":"owner","password":"at least 12 characters"}'
+docker compose -f docker/docker-compose.yml up -d --build
 ```
 
-Direct local requests need no setup code. From another machine or through a reverse proxy, add `"setupCode"` to the request; the code is printed in the server log on startup (`docker logs` in Docker).
+The image also serves the Web UI at <http://127.0.0.1:8787>. Data, including `secrets.yaml`, lives in the `/data` volume. Write a key there like this, then reference `file:DEEPSEEK_API_KEY` in the profile:
 
-You can also set up and chat entirely from the command-line client, without the Web UI (after `pnpm build`, run it in `apps/cli` or via `pnpm --filter @ai-personal/cli exec ai-personal …`):
+```bash
+printf 'DEEPSEEK_API_KEY: "%s"\n' '<your key>' | \
+  docker compose -f docker/docker-compose.yml exec -T ai-personal sh -c 'umask 077; cat > /data/secrets.yaml'
+```
+
+It only listens on 127.0.0.1 by default; to reach it from other machines, put it behind a reverse proxy with HTTPS. Setting it up from another machine or through a proxy needs the one-time setup code printed in the startup log (`docker compose -f docker/docker-compose.yml logs`).
+
+### 3. A full chat with curl (no Web UI)
+
+Everything is in the versioned `/api/v1` API; the OpenAPI document is at `/api/v1/openapi.json` (authentication required). The example signs up with a password, exchanges the session for a personal access token, and then sends `Authorization: Bearer`, which needs no CSRF token.
+
+```bash
+API=http://127.0.0.1:8787/api/v1
+
+# Create the owner (no setup code needed from this machine); the session cookie goes to jar.txt
+curl -s -c jar.txt -X POST $API/auth/setup -H 'content-type: application/json' \
+  -d '{"username":"owner","password":"correct horse battery staple"}' > setup.json
+CSRF=$(sed -E 's/.*"csrfToken":"([^"]+)".*/\1/' setup.json)
+
+# Exchange it for a personal access token (the plaintext is only returned once)
+TOKEN=$(curl -s -b jar.txt -X POST $API/tokens -H "x-csrf-token: $CSRF" -H 'content-type: application/json' \
+  -d '{"name":"curl"}' | sed -E 's/.*"token":"([^"]+)".*/\1/')
+AUTH="authorization: Bearer $TOKEN"
+
+# Add a model profile; keyStatus "present" means the server found the key
+curl -s -X POST $API/models -H "$AUTH" -H 'content-type: application/json' \
+  -d '{"label":"deepseek","kind":"openai-compatible","baseURL":"https://api.deepseek.com/v1","apiKeyRef":"env:DEEPSEEK_API_KEY","model":"deepseek-chat","purpose":["chat","cheap"]}'
+
+# Create a session and send a message; -N streams the reply as server-sent events
+SID=$(curl -s -X POST $API/sessions -H "$AUTH" -H 'content-type: application/json' -d '{}' \
+  | sed -E 's/.*"id":"([^"]+)".*/\1/')
+curl -N -X POST $API/sessions/$SID/messages -H "$AUTH" -H 'content-type: application/json' \
+  -d '{"text":"Remember: I live in Hangzhou"}'
+```
+
+When the stream shows `approval-required` (for example the model wants to call `memory.save`), the run pauses until you approve or reject it from another terminal:
+
+```bash
+curl -s -X POST $API/approvals/<callId> -H "$AUTH" -H 'content-type: application/json' -d '{"decision":"approve"}'
+```
+
+After a disconnect you can resume the same run: `curl -N $API/runs/<runId>/events -H "$AUTH" -H 'last-event-id: 0'`.
+
+The same flow in Windows PowerShell (the streaming part uses the built-in `curl.exe`):
+
+```powershell
+$api = 'http://127.0.0.1:8787/api/v1'
+$s = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+$setup = Invoke-RestMethod -Method Post "$api/auth/setup" -WebSession $s -ContentType 'application/json' `
+    -Body '{"username":"owner","password":"correct horse battery staple"}'
+$tok = Invoke-RestMethod -Method Post "$api/tokens" -WebSession $s -Headers @{ 'X-CSRF-Token' = $setup.csrfToken } `
+    -ContentType 'application/json' -Body '{"name":"powershell"}'
+$h = @{ Authorization = "Bearer $($tok.token)" }
+Invoke-RestMethod -Method Post "$api/models" -Headers $h -ContentType 'application/json' -Body (@{
+    label = 'deepseek'; kind = 'openai-compatible'; baseURL = 'https://api.deepseek.com/v1'
+    apiKeyRef = 'env:DEEPSEEK_API_KEY'; model = 'deepseek-chat'; purpose = @('chat', 'cheap')
+} | ConvertTo-Json)
+$sid = (Invoke-RestMethod -Method Post "$api/sessions" -Headers $h -ContentType 'application/json' -Body '{}').id
+'{"text":"Hello"}' | curl.exe -N -X POST "$api/sessions/$sid/messages" -H "Authorization: Bearer $($tok.token)" `
+    -H 'content-type: application/json' --data-binary '@-'
+```
+
+### 4. Command-line client
+
+You can also set up and chat without the Web UI (after `pnpm build`, run `pnpm --filter @ai-personal/cli exec ai-personal …`, or `node dist/bin.js …` in `apps/cli`):
 
 ```bash
 ai-personal setup -u owner          # create the owner and save a personal access token (~/.ai-personal/cli.json, mode 0600)
@@ -56,7 +133,11 @@ ai-personal ask "Explain AGPL section 13 in three sentences"
 ai-personal chat                    # interactive chat: /new /model /retry /exit; Ctrl+C stops the current reply
 ```
 
-Keys are only accepted as `env:` / `file:` references, never in plain text. Tool calls that need approval (such as `memory.save`) are asked about in a terminal and rejected when not interactive, unless you pass `--approve-tools`.
+For Anthropic or Gemini use `--kind anthropic` or `--kind gemini` (no `--base-url` needed). Tool calls that need approval (such as `memory.save`) are asked about in a terminal and rejected when not interactive, unless you pass `--approve-tools`.
+
+### Development
+
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (Vitest), and after `pnpm build`, `pnpm test:e2e` (Playwright smoke test; run `pnpm --filter @ai-personal/web exec playwright install chromium` once first). Conventions are in [AGENTS.md](AGENTS.md) and changes in [CHANGELOG.md](CHANGELOG.md).
 
 Please read [CONTRIBUTING.md](CONTRIBUTING.md) before contributing.
 
