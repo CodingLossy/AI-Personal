@@ -21,6 +21,7 @@ import { createSettingsRepository } from './settings.js';
 import { createToolRepositories } from './tools.js';
 import { createFsRootRepository } from './fs-roots.js';
 import { createItemRepository } from './items.js';
+import { createMcpServerRepository } from './mcp.js';
 import { decodeCursor, encodeCursor, type Page } from './cursor.js';
 import type { Connection } from './db.js';
 import { newId } from './ids.js';
@@ -500,6 +501,7 @@ export function createRepositories(conn: Connection, options: RepoOptions = {}) 
         ...createToolRepositories(conn, now),
         fsRoots: createFsRootRepository(conn, now),
         items: createItemRepository(conn, now),
+        mcpServers: createMcpServerRepository(conn, now),
         ...createAuthRepositories(conn, now),
     };
 }

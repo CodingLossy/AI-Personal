@@ -20,6 +20,12 @@ const ALLOWED = new Set([
     'Python-2.0',
     'Zlib',
 ]);
+/**
+ * 人工核对过的例外:package.json 没有写 SPDX 标识的包。只用于开发依赖,写明核对结果。
+ * - @modelcontextprotocol/server-filesystem:「SEE LICENSE IN LICENSE」,仓库 LICENSE 为 MIT 与 Apache-2.0
+ *   (许可证迁移期),只作为 MCP 客户端集成测试用的官方示例服务器(ADR 0013 第 1 节)。
+ */
+const REVIEWED = new Map([['@modelcontextprotocol/server-filesystem', 'MIT OR Apache-2.0']]);
 /** 仅允许以未修改库形式使用,输出警告供人工确认。 */
 const WEAK_COPYLEFT = new Set(['MPL-2.0']);
 
@@ -57,7 +63,7 @@ for (const [license, pkgs] of Object.entries(byLicense)) {
         count++;
         const id = `${pkg.name}@${pkg.versions?.join(',') ?? pkg.version}`;
         if (TELEMETRY.some((re) => re.test(pkg.name))) errors.push(`${id}: 禁止的遥测依赖`);
-        if (evaluate(license, ALLOWED)) continue;
+        if (evaluate(REVIEWED.get(pkg.name) ?? license, ALLOWED)) continue;
         if (evaluate(license, new Set([...ALLOWED, ...WEAK_COPYLEFT]))) {
             warnings.push(`${id}: ${license}(仅允许以未修改库形式使用)`);
         } else {

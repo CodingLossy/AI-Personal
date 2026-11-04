@@ -7,6 +7,7 @@ import { api, errorText } from './api.js';
 import { useI18n } from './i18n.js';
 import { isValidKeyRef } from './live-turn.js';
 import { FsRoots } from './FsRoots.js';
+import { McpServers } from './McpServers.js';
 import { Preauthorizations } from './Preauthorizations.js';
 
 const PURPOSES: ModelPurpose[] = ['chat', 'cheap'];
@@ -318,6 +319,7 @@ export function SettingsPage({ settings, onSettings }: { settings: Settings; onS
             </section>
             <ModelProfiles onChanged={setProfiles} />
             <FsRoots />
+            <McpServers />
             <Preauthorizations />
         </div>
     );

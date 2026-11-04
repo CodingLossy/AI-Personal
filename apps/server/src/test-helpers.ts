@@ -14,6 +14,7 @@ import type { WebFetchOptions } from '@ai-personal/tools';
 import { createItemService } from '@ai-personal/items';
 import { createSummarizer, createToolRegistry } from './agent-setup.js';
 import { createApp, type AppDeps } from './app.js';
+import { createMcpControl } from './mcp-setup.js';
 import { FailureLimiter } from './auth/rate-limit.js';
 import { createLogger } from './log.js';
 
@@ -84,7 +85,10 @@ export async function createTestServer(
         ...(options.approvalTimeoutMs ? { approvalTimeoutMs: options.approvalTimeoutMs } : {}),
         summarize: createSummarizer(repos, providerFor),
     });
+    // MCP 子进程在 cleanup 时关闭
+    const mcp = createMcpControl(runs.tools);
     const app = createApp({
+        mcp,
         config: {
             sourceUrl: 'https://github.com/CodingLossy/AI-Personal',
             webDir: null,
@@ -112,6 +116,7 @@ export async function createTestServer(
         repos,
         logs,
         async cleanup() {
+            mcp.closeAll();
             await runs.idle();
             conn.close();
             rmSync(dir, { recursive: true, force: true });

@@ -11,6 +11,7 @@ import { createProvider, Redactor, SecretStore } from '@ai-personal/providers';
 import { createRepositories, openStorage } from '@ai-personal/storage';
 import { createSummarizer, createToolRegistry } from './agent-setup.js';
 import { createApp } from './app.js';
+import { createMcpControl } from './mcp-setup.js';
 import { randomToken } from './auth/crypto.js';
 import { loadConfig } from './config.js';
 import { createLogger } from './log.js';
@@ -61,6 +62,14 @@ const runs = new RunManager({
 const interrupted = runs.recoverInterrupted();
 if (interrupted > 0) logger.warn({ count: interrupted }, 'marked runs interrupted by the previous shutdown as failed');
 
+// 有已启用的 MCP 服务器时才加载 MCP 客户端并连接(ADR 0013 第 4 节)
+const mcp = createMcpControl(runs.tools, {
+    onError: (err, { server }) => logger.warn({ err, mcpServer: server }, 'MCP server failed to connect'),
+});
+for (const server of repos.mcpServers.allEnabled()) {
+    void mcp.apply(server).then((status) => logger.info({ mcpServer: server.name, state: status.state }, 'MCP server'));
+}
+
 const app = createApp({
     config: { ...config, setupCode },
     repos,
@@ -71,6 +80,7 @@ const app = createApp({
     runs,
     memory,
     items,
+    mcp,
     redact: (text) => redactor.redact(text),
 });
 
@@ -82,6 +92,7 @@ const websockets = attachWebSocket(server, { repos, bus, logger });
 function shutdown(signal: string): void {
     logger.info({ signal }, 'shutdown');
     websockets.close();
+    mcp.closeAll();
     server.close(() => {
         conn.close();
         process.exit(0);
