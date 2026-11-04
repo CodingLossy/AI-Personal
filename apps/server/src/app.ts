@@ -6,6 +6,7 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { type HealthResponse, MetaResponseSchema, PROTOCOL_VERSION, SERVER_LICENSE } from '@ai-personal/shared';
 import type { EventBus, RunManager } from '@ai-personal/agent';
+import { detectCredential, type MemoryService } from '@ai-personal/memory';
 import type { ProviderDeps, SecretStore } from '@ai-personal/providers';
 import { newId, type Repositories } from '@ai-personal/storage';
 import type { Context } from 'hono';
@@ -19,6 +20,7 @@ import { ApiError, handleError, notFound, problemResponse } from './errors.js';
 import type { Logger } from './log.js';
 import { authRoutes } from './routes/auth.js';
 import { json } from './routes/common.js';
+import { memoryRoutes } from './routes/memory.js';
 import { modelRoutes } from './routes/models.js';
 import { runRoutes } from './routes/runs.js';
 import { sessionRoutes } from './routes/sessions.js';
@@ -36,6 +38,8 @@ export interface AppDeps {
     /** 事件总线与运行管理(ADR 0004 第 5 节)。 */
     bus: EventBus;
     runs: RunManager;
+    /** 记忆 v1(REST 与 memory.* 工具共用)。 */
+    memory: MemoryService;
     now?: () => Date;
     /** 请求来源地址;默认取 TCP 对端地址(不信任 X-Forwarded-For)。 */
     clientIp?: (c: Context<AppEnv>) => string;
@@ -114,7 +118,7 @@ export function createApp(deps: AppDeps): OpenAPIHono<AppEnv> {
                     protocolVersion: PROTOCOL_VERSION,
                     license: SERVER_LICENSE,
                     sourceUrl: config.sourceUrl,
-                    capabilities: ['chat'],
+                    capabilities: ['chat', 'memory'],
                 },
                 200,
             ),
@@ -133,7 +137,8 @@ export function createApp(deps: AppDeps): OpenAPIHono<AppEnv> {
         .route('/', tokenRoutes({ repos, now }))
         .route('/', modelRoutes({ repos, secrets: deps.secrets, providerDeps: deps.providerDeps }))
         .route('/', sessionRoutes(runDeps))
-        .route('/', runRoutes(runDeps));
+        .route('/', runRoutes(runDeps))
+        .route('/', memoryRoutes({ repos, memory: deps.memory, runs: deps.runs, detectCredential }));
     app.route('/api/v1', v1);
 
     // OpenAPI 文档同样需要鉴权(业主决定;CI 另导出静态文件)

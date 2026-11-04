@@ -44,6 +44,9 @@ importers:
       '@ai-personal/agent':
         specifier: workspace:*
         version: link:../../packages/agent
+      '@ai-personal/memory':
+        specifier: workspace:*
+        version: link:../../packages/memory
       '@ai-personal/providers':
         specifier: workspace:*
         version: link:../../packages/providers

@@ -7,8 +7,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Writable } from 'node:stream';
 import { EventBus, RunManager } from '@ai-personal/agent';
+import { createMemoryService } from '@ai-personal/memory';
 import { createProvider, type ModelProvider, Redactor, SecretStore } from '@ai-personal/providers';
 import { createRepositories, openStorage, type Repositories } from '@ai-personal/storage';
+import { createMemoryTools, createSummarizer } from './agent-setup.js';
 import { createApp, type AppDeps } from './app.js';
 import { FailureLimiter } from './auth/rate-limit.js';
 import { createLogger } from './log.js';
@@ -61,12 +63,17 @@ export async function createTestServer(
         sleep: () => Promise.resolve(),
         ...(options.fetch ? { fetch: options.fetch } : {}),
     };
+    const providerFor = (profile: Parameters<typeof createProvider>[0]) =>
+        options.provider ?? createProvider(profile, providerDeps);
+    const memory = createMemoryService(repos);
     const bus = new EventBus();
     const runs = new RunManager({
         repos,
         bus,
         persistIntervalMs: 0,
-        providerFor: (profile) => options.provider ?? createProvider(profile, providerDeps),
+        providerFor,
+        tools: createMemoryTools(memory),
+        summarize: createSummarizer(repos, providerFor),
     });
     const app = createApp({
         config: {
@@ -82,6 +89,7 @@ export async function createTestServer(
         providerDeps,
         bus,
         runs,
+        memory,
         clientIp: (c) => c.req.header('x-test-ip') ?? '127.0.0.1',
         loginLimiter: new FailureLimiter(5, 60_000),
     });

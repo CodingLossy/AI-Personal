@@ -5,8 +5,10 @@ import { mkdirSync } from 'node:fs';
 import type { Server } from 'node:http';
 import { serve } from '@hono/node-server';
 import { EventBus, RunManager } from '@ai-personal/agent';
+import { createMemoryService } from '@ai-personal/memory';
 import { createProvider, Redactor, SecretStore } from '@ai-personal/providers';
 import { createRepositories, openStorage } from '@ai-personal/storage';
+import { createMemoryTools, createSummarizer } from './agent-setup.js';
 import { createApp } from './app.js';
 import { randomToken } from './auth/crypto.js';
 import { loadConfig } from './config.js';
@@ -39,17 +41,21 @@ if (repos.owners.count() === 0) {
 }
 
 const providerDeps = { secrets, redactor };
+const providerFor = (profile: Parameters<typeof createProvider>[0]) => createProvider(profile, providerDeps);
+const memory = createMemoryService(repos);
 const bus = new EventBus();
 const runs = new RunManager({
     repos,
     bus,
-    providerFor: (profile) => createProvider(profile, providerDeps),
+    providerFor,
+    tools: createMemoryTools(memory),
+    summarize: createSummarizer(repos, providerFor),
     onError: (err, { runId }) => logger.error({ err, runId }, 'run failed unexpectedly'),
 });
 const interrupted = runs.recoverInterrupted();
 if (interrupted > 0) logger.warn({ count: interrupted }, 'marked runs interrupted by the previous shutdown as failed');
 
-const app = createApp({ config: { ...config, setupCode }, repos, logger, secrets, providerDeps, bus, runs });
+const app = createApp({ config: { ...config, setupCode }, repos, logger, secrets, providerDeps, bus, runs, memory });
 
 const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
     logger.info({ host: info.address, port: info.port, dataDir: config.dataDir }, 'listening');
