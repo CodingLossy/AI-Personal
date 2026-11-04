@@ -68,8 +68,10 @@ jobs:
           fi
           git show "origin/${{ github.base_ref }}:apps/server/openapi/v1.json" > "$RUNNER_TEMP/base.json"
           cp apps/server/openapi/v1.json "$RUNNER_TEMP/head.json"
+          # 事件联合类型(AgentEvent)新增或修改变体不算破坏性变更:ADR 0004 要求客户端忽略未知事件类型
+          cp .github/oasdiff-severity.txt "$RUNNER_TEMP/severity.txt"
           docker run --rm -v "$RUNNER_TEMP:/specs:ro" tufin/oasdiff:v1.35.0 \
-            breaking /specs/base.json /specs/head.json --fail-on ERR
+            breaking /specs/base.json /specs/head.json --fail-on ERR --severity-levels /specs/severity.txt
 
   compliance:
     name: license compliance

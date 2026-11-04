@@ -15,6 +15,7 @@ path = [
     ".npmrc",
     ".prettierignore",
     ".dockerignore",
+    ".github/oasdiff-severity.txt",
     "NOTICE",
     "templates/**",
 ]
