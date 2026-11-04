@@ -1,0 +1,240 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (C) 2026 尹绪柏 (Theodore Yin)
+
+import type {
+    AccessToken,
+    ApprovalDecision,
+    AuthStatus,
+    CreatedAccessToken,
+    CreateSessionRequest,
+    CreateTokenRequest,
+    LoginRequest,
+    LoginResponse,
+    Me,
+    Memory,
+    MemoryPatch,
+    MemorySaveInput,
+    MemorySaveResult,
+    MemorySearchInput,
+    MemorySearchResult,
+    Message,
+    MetaResponse,
+    ModelProfile,
+    ModelProfileInput,
+    ModelProfilePatch,
+    ModelTestResult,
+    Run,
+    SendMessageAccepted,
+    SendMessageRequest,
+    Session,
+    SetupRequest,
+    UpdateSessionRequest,
+} from '@ai-personal/shared';
+import { RunStream, type StreamOptions } from './run-stream.js';
+import { Transport, type TransportOptions } from './transport.js';
+import {
+    connectEvents,
+    type ConnectEventsOptions,
+    type EventConnection,
+    type WebSocketFactory,
+    type WebSocketLike,
+} from './ws.js';
+
+export interface Page<T> {
+    items: T[];
+    nextCursor: string | null;
+}
+
+export interface PageParams {
+    cursor?: string | undefined;
+    limit?: number | undefined;
+}
+
+export interface ClientOptions extends TransportOptions {
+    /** 自定义 WebSocket 构造;默认用全局 WebSocket(Node ≥ 22 / 浏览器)。 */
+    webSocket?: WebSocketFactory | undefined;
+}
+
+/** 不重复的幂等键(ADR 0004 第 6 节);不依赖 crypto.randomUUID,以便在非安全上下文中使用。 */
+function newClientMessageId(): string {
+    const rand = Array.from({ length: 16 }, () => Math.floor(Math.random() * 36).toString(36)).join('');
+    return `c${Date.now().toString(36)}${rand}`;
+}
+
+const enc = encodeURIComponent;
+
+/** 从登录 / 初始化响应中取出会话 Cookie(仅非浏览器环境可读 Set-Cookie)。 */
+function sessionCookie(res: Response): string {
+    const list = typeof res.headers.getSetCookie === 'function' ? res.headers.getSetCookie() : [];
+    const pairs = list.map((c) => c.split(';')[0]!.trim()).filter((p) => p.startsWith('aip_'));
+    if (!pairs.some((p) => p.startsWith('aip_session='))) {
+        throw new Error('The server did not return a session cookie (token exchange is not available in browsers)');
+    }
+    return pairs.join('; ');
+}
+
+export function createClient(options: ClientOptions) {
+    const t = new Transport(options);
+    const sse = { accept: 'text/event-stream' };
+
+    /** 用刚拿到的会话 Cookie 创建令牌,再登出这个 Cookie 会话。 */
+    const exchange = async (res: Response, tokenName: string, expiresInDays?: number) => {
+        const cookie = sessionCookie(res);
+        const login = (await res.json()) as LoginResponse;
+        const headers = { cookie, 'x-csrf-token': login.csrfToken };
+        const body: CreateTokenRequest = { name: tokenName, ...(expiresInDays ? { expiresInDays } : {}) };
+        const created = await t.json<CreatedAccessToken>('/tokens', { method: 'POST', body, headers });
+        await t.raw('/auth/logout', { method: 'POST', headers }).catch(() => undefined);
+        return { token: created, owner: login.owner };
+    };
+
+    const runStream = (open: () => Promise<Response>, stream?: StreamOptions, known?: { runId: string }) =>
+        new RunStream(t, open, stream, known);
+
+    return {
+        baseUrl: t.baseUrl,
+
+        meta: () => t.json<MetaResponse>('/meta'),
+
+        auth: {
+            status: () => t.json<AuthStatus>('/auth/status'),
+            setup: (body: SetupRequest) => t.json<LoginResponse>('/auth/setup', { method: 'POST', body }),
+            login: (body: LoginRequest) => t.json<LoginResponse>('/auth/login', { method: 'POST', body }),
+            logout: () => t.json<void>('/auth/logout', { method: 'POST' }),
+            me: () => t.json<Me>('/auth/me'),
+            /** 仅 Node:初始化主人账户并直接换成个人访问令牌,不保留 Cookie 会话。 */
+            setupForToken: async (body: SetupRequest & { tokenName: string; expiresInDays?: number }) => {
+                const { tokenName, expiresInDays, ...setup } = body;
+                return exchange(await t.raw('/auth/setup', { method: 'POST', body: setup }), tokenName, expiresInDays);
+            },
+            /** 仅 Node:用密码登录并换成个人访问令牌,不保留 Cookie 会话。 */
+            loginForToken: async (body: LoginRequest & { tokenName: string; expiresInDays?: number }) => {
+                const { tokenName, expiresInDays, ...login } = body;
+                return exchange(await t.raw('/auth/login', { method: 'POST', body: login }), tokenName, expiresInDays);
+            },
+        },
+
+        tokens: {
+            list: () => t.json<Page<AccessToken>>('/tokens'),
+            create: (body: CreateTokenRequest) => t.json<CreatedAccessToken>('/tokens', { method: 'POST', body }),
+            revoke: (id: string) => t.json<void>(`/tokens/${enc(id)}`, { method: 'DELETE' }),
+        },
+
+        models: {
+            list: () => t.json<Page<ModelProfile>>('/models'),
+            create: (body: ModelProfileInput) => t.json<ModelProfile>('/models', { method: 'POST', body }),
+            get: (id: string) => t.json<ModelProfile>(`/models/${enc(id)}`),
+            update: (id: string, body: ModelProfilePatch) =>
+                t.json<ModelProfile>(`/models/${enc(id)}`, { method: 'PATCH', body }),
+            delete: (id: string) => t.json<void>(`/models/${enc(id)}`, { method: 'DELETE' }),
+            test: (id: string) => t.json<ModelTestResult>(`/models/${enc(id)}/test`, { method: 'POST' }),
+        },
+
+        sessions: {
+            list: (page: PageParams = {}) => t.json<Page<Session>>('/sessions', { query: { ...page } }),
+            create: (body: CreateSessionRequest = {}) => t.json<Session>('/sessions', { method: 'POST', body }),
+            get: (id: string) => t.json<Session>(`/sessions/${enc(id)}`),
+            update: (id: string, body: UpdateSessionRequest) =>
+                t.json<Session>(`/sessions/${enc(id)}`, { method: 'PATCH', body }),
+            delete: (id: string) => t.json<void>(`/sessions/${enc(id)}`, { method: 'DELETE' }),
+            messages: (id: string, page: PageParams = {}) =>
+                t.json<Page<Message>>(`/sessions/${enc(id)}/messages`, { query: { ...page } }),
+            /**
+             * 发送消息并流式接收事件。未给 clientMessageId 时自动生成,断线重发不会产生重复回复。
+             */
+            send: (id: string, body: SendMessageRequest, stream: StreamOptions = {}) => {
+                const payload = { ...body, clientMessageId: body.clientMessageId ?? newClientMessageId() };
+                return runStream(
+                    () =>
+                        t.raw(`/sessions/${enc(id)}/messages`, {
+                            method: 'POST',
+                            body: payload,
+                            headers: sse,
+                            signal: stream.signal,
+                        }),
+                    stream,
+                );
+            },
+            /** 发送消息但不等待事件(?stream=false),返回 202 的结果。 */
+            sendAsync: (id: string, body: SendMessageRequest) =>
+                t.json<SendMessageAccepted>(`/sessions/${enc(id)}/messages`, {
+                    method: 'POST',
+                    body,
+                    query: { stream: 'false' },
+                }),
+            regenerate: (id: string, messageId: string, stream: StreamOptions = {}) =>
+                runStream(
+                    () =>
+                        t.raw(`/sessions/${enc(id)}/messages/${enc(messageId)}/regenerate`, {
+                            method: 'POST',
+                            headers: sse,
+                            signal: stream.signal,
+                        }),
+                    stream,
+                ),
+        },
+
+        runs: {
+            get: (id: string) => t.json<Run>(`/runs/${enc(id)}`),
+            /** 续看:先补发 afterSeq 之后的事件,运行未结束时继续推送。 */
+            events: (id: string, afterSeq = 0, stream: StreamOptions = {}) =>
+                new RunStream(
+                    t,
+                    () =>
+                        t.raw(`/runs/${enc(id)}/events`, {
+                            headers: { ...sse, 'last-event-id': String(afterSeq) },
+                            signal: stream.signal,
+                        }),
+                    stream,
+                    { runId: id, afterSeq },
+                ),
+            cancel: (id: string) => t.json<{ cancelled: true }>(`/runs/${enc(id)}/cancel`, { method: 'POST' }),
+            retry: (id: string, stream: StreamOptions = {}) =>
+                runStream(
+                    () =>
+                        t.raw(`/runs/${enc(id)}/retry`, {
+                            method: 'POST',
+                            headers: sse,
+                            signal: stream.signal,
+                        }),
+                    stream,
+                ),
+        },
+
+        approvals: {
+            decide: (callId: string, decision: ApprovalDecision['decision']) =>
+                t.json<{ callId: string; decision: ApprovalDecision['decision'] }>(`/approvals/${enc(callId)}`, {
+                    method: 'POST',
+                    body: { decision },
+                }),
+        },
+
+        memory: {
+            list: (params: { limit?: number } = {}) => t.json<Page<Memory>>('/memory', { query: { ...params } }),
+            save: (body: MemorySaveInput) => t.json<MemorySaveResult>('/memory', { method: 'POST', body }),
+            search: (body: MemorySearchInput) => t.json<MemorySearchResult>('/memory/search', { method: 'POST', body }),
+            get: (id: string) => t.json<Memory>(`/memory/${enc(id)}`),
+            update: (id: string, body: MemoryPatch) => t.json<Memory>(`/memory/${enc(id)}`, { method: 'PATCH', body }),
+            delete: (id: string) => t.json<void>(`/memory/${enc(id)}`, { method: 'DELETE' }),
+        },
+
+        /** WebSocket 事件订阅,断线自动带 lastSeq 重连补发(ADR 0004 第 5 节)。 */
+        connectEvents: (connect: ConnectEventsOptions): EventConnection => {
+            const url = t.url('/ws').replace(/^http/, 'ws');
+            const headers: Record<string, string> = t.token ? { authorization: `Bearer ${t.token}` } : {};
+            const factory: WebSocketFactory =
+                options.webSocket ??
+                ((u, h) => {
+                    const Ctor = globalThis.WebSocket as unknown as new (
+                        url: string,
+                        init?: { headers: Record<string, string> },
+                    ) => WebSocketLike;
+                    // 浏览器里没有 headers 参数,靠同源 Cookie 鉴权
+                    return Object.keys(h).length > 0 ? new Ctor(u, { headers: h }) : new Ctor(u);
+                });
+            return connectEvents(url, headers, factory, connect);
+        },
+    };
+}
+
+export type AipClient = ReturnType<typeof createClient>;
