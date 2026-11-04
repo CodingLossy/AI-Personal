@@ -13,6 +13,7 @@ export { newId } from './ids.js';
 export type { NewMemory, SessionSummary } from './memory.js';
 export type { ModelProfileRecord } from './profiles.js';
 export type { NewApprovalRequest, NewAuditEntry } from './tools.js';
+export { ItemCycleError, type ItemInput, type ItemRepository } from './items.js';
 export {
     checksum,
     migrate,

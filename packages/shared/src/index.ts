@@ -6,6 +6,7 @@ export * from './common.js';
 export * from './errors.js';
 export * from './events.js';
 export * from './fs.js';
+export * from './items.js';
 export * from './memory.js';
 export * from './meta.js';
 export * from './models.js';
