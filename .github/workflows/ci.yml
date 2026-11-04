@@ -50,6 +50,21 @@ jobs:
           name: openapi-v1
           path: apps/server/openapi/v1.json
 
+  windows:
+    name: Windows path security (tools)
+    # 文件工具的逃逸测试在 Windows 上跑:junction、8.3 短名、备用数据流、设备名、大小写、UNC(ADR 0011)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Tools tests (with coverage gate)
+        run: pnpm turbo run test --filter=@ai-personal/tools
+
   openapi-compat:
     name: OpenAPI breaking changes
     # 只在 PR 上比较基线分支与本分支的 OpenAPI 文档(ADR 0010 第 10 节);oasdiff 以容器运行,不是项目依赖
