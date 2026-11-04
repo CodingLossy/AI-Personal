@@ -48,7 +48,7 @@ const runs = new RunManager({
     repos,
     bus,
     providerFor,
-    tools: createToolRegistry(memory),
+    tools: createToolRegistry(memory, repos),
     redact: (text) => redactor.redact(text),
     summarize: createSummarizer(repos, providerFor),
     onError: (err, { runId }) => logger.error({ err, runId }, 'run failed unexpectedly'),

@@ -90,6 +90,11 @@ describe('/api/v1/tools、/approvals、/preauthorizations、/audit', () => {
         const tools = pageOf(ToolInfo).parse(await (await req('/api/v1/tools')).json()).items;
         expect(tools.map((t) => [t.name, t.risk, t.approval, t.preauthorizable, t.requiredConstraint])).toEqual([
             ['calc', 'read', 'auto', true, null],
+            ['fs.list', 'read', 'auto', true, null],
+            ['fs.move', 'write', 'required', true, 'pathPrefix'],
+            ['fs.read', 'read', 'auto', true, null],
+            ['fs.search', 'read', 'auto', true, null],
+            ['fs.write', 'write', 'required', true, 'pathPrefix'],
             ['memory.save', 'write', 'required', true, null],
             ['memory.search', 'read', 'auto', true, null],
             ['time', 'read', 'auto', true, null],
