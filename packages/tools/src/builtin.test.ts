@@ -282,10 +282,10 @@ describe('web.fetch(本机测试服务器)', () => {
         expect(tool).toMatchObject({ risk: 'read', approval: 'required', untrustedOutput: true });
         expect(checkRemember(tool, { scope: 'always' })).toMatch(/only be pre-authorized with a domain constraint/);
         expect(checkRemember(tool, { scope: 'always', constraint: { domain: 'example.com' } })).toBeNull();
-        expect(tool.constraints?.domain?.({ url: 'https://Docs.Example.com/a' })).toBe('docs.example.com');
-        expect(tool.constraints?.domain?.({ url: 'file:///x' })).toBeNull();
-        expect(tool.constraints?.domain?.({ url: 'bad' })).toBeNull();
-        expect(tool.constraints?.domain?.(null)).toBeNull();
+        expect(tool.constraints?.domain?.({ url: 'https://Docs.Example.com/a' }, ctx)).toBe('docs.example.com');
+        expect(tool.constraints?.domain?.({ url: 'file:///x' }, ctx)).toBeNull();
+        expect(tool.constraints?.domain?.({ url: 'bad' }, ctx)).toBeNull();
+        expect(tool.constraints?.domain?.(null, ctx)).toBeNull();
         expect(tool.summarize({ url: 'https://example.com' })).toBe('Fetch https://example.com');
     });
 });

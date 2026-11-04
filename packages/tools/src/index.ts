@@ -5,6 +5,7 @@
 export { DIGEST_LIMIT, inputDigest, redactedInput } from './digest.js';
 export {
     checkRemember,
+    prepareRemember,
     decide,
     defaultApproval,
     isEnabled,
@@ -13,7 +14,7 @@ export {
     type PolicyOptions,
 } from './policy.js';
 export { ToolRegistry, type ToolSpecLike } from './registry.js';
-export type { ToolContext, ToolDefinition } from './types.js';
+export { type ToolContext, type ToolDefinition, ToolDeniedError } from './types.js';
 export { type BuiltinToolOptions, createBuiltinTools } from './builtin/index.js';
 export { CalcError, createCalcTool, evaluate } from './builtin/calc.js';
 export { htmlToText } from './builtin/html.js';
@@ -30,3 +31,14 @@ export {
     WebFetchError,
     type WebFetchOptions,
 } from './builtin/web-fetch.js';
+export {
+    caseInsensitive,
+    checkLexical,
+    checkWritableTarget,
+    isFilesystemRoot,
+    isWithin,
+    normalizeRoot,
+    PathError,
+    resolveInRoots,
+} from './fs/paths.js';
+export { createFsTools, type FsToolOptions, MAX_READ_BYTES, MAX_WRITE_BYTES } from './fs/tools.js';

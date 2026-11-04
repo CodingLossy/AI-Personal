@@ -10,6 +10,7 @@ import type {
     ToolApproval,
     ToolRisk,
 } from '@ai-personal/shared';
+import { isWithin } from './fs/paths.js';
 import type { ToolContext, ToolDefinition } from './types.js';
 
 export type PolicyDecision =
@@ -41,11 +42,9 @@ export function defaultApproval(tool: ToolDefinition, options: PolicyOptions = {
     return tool.risk === 'read' && tool.approval !== 'required' ? 'auto' : 'required';
 }
 
-/** 路径前缀匹配:必须在分隔符边界上(/docs 不匹配 /docs-private)。 */
+/** 路径前缀匹配:必须在分隔符边界上(/docs 不匹配 /docs-private);Windows 与 macOS 上不区分大小写。 */
 function underPrefix(value: string, prefix: string): boolean {
-    const trimmed = prefix.replace(/[\\/]+$/, '');
-    if (value === trimmed) return true;
-    return value.startsWith(trimmed) && (value[trimmed.length] === '/' || value[trimmed.length] === '\\');
+    return isWithin(value, prefix);
 }
 
 /** 域名匹配:example.com 只匹配它本身;*.example.com 匹配所有子域,不匹配 example.com 本身。 */
@@ -55,11 +54,16 @@ function matchesDomain(host: string, pattern: string): boolean {
     return h === pattern;
 }
 
-function constraintMatches(tool: ToolDefinition, input: unknown, constraint: PreauthConstraint | null): boolean {
+function constraintMatches(
+    tool: ToolDefinition,
+    input: unknown,
+    context: ToolContext,
+    constraint: PreauthConstraint | null,
+): boolean {
     if (!constraint) return true;
     for (const [kind, expected] of Object.entries(constraint) as [PreauthConstraintKind, string | undefined][]) {
         if (expected === undefined) continue;
-        const actual = tool.constraints?.[kind]?.(input) ?? null;
+        const actual = tool.constraints?.[kind]?.(input, context) ?? null;
         if (actual === null) return false;
         if (kind === 'pathPrefix' && !underPrefix(actual, expected)) return false;
         if (kind === 'domain' && !matchesDomain(actual, expected)) return false;
@@ -85,7 +89,7 @@ export function decide(
             (p) =>
                 p.toolName === tool.name &&
                 (p.scope === 'always' || p.sessionId === context.sessionId) &&
-                constraintMatches(tool, input, p.constraint),
+                constraintMatches(tool, input, context, p.constraint),
         );
         if (match) return { action: 'run', decision: 'preauthorized', preauthId: match.id };
 
@@ -100,6 +104,31 @@ export function decide(
     }
 
     return defaultApproval(tool, options) === 'auto' ? { action: 'run', decision: 'auto' } : { action: 'ask' };
+}
+
+/**
+ * 保存预授权前规范化约束(ADR 0011 第 4 节);返回规范化后的 remember,或错误说明。
+ * 先调用 checkRemember 做结构校验。
+ */
+export function prepareRemember(
+    tool: ToolDefinition,
+    remember: PreauthRemember,
+    context: { ownerId: string },
+): { ok: PreauthRemember } | { error: string } {
+    const problem = checkRemember(tool, remember);
+    if (problem) return { error: problem };
+    if (!remember.constraint) return { ok: remember };
+    const constraint: PreauthConstraint = {};
+    for (const [kind, value] of Object.entries(remember.constraint) as [PreauthConstraintKind, string | undefined][]) {
+        if (value === undefined) continue;
+        const normalize = tool.normalizeConstraint?.[kind];
+        try {
+            constraint[kind] = normalize ? normalize(value, context) : value;
+        } catch (error) {
+            return { error: `invalid ${kind}: ${error instanceof Error ? error.message : String(error)}` };
+        }
+    }
+    return { ok: { ...remember, constraint } };
 }
 
 /** 校验批准时的 remember;返回错误说明,合法时返回 null(ADR 0010 第 3 节)。 */
