@@ -18,11 +18,17 @@ export const Settings = z.object({
         /** 自动从对话中抽取记忆;M1 不实现抽取,默认关闭(M2 决定默认值)。 */
         autoExtract: z.boolean(),
     }),
+    /** 本地知识库(ADR 0015)。自 M2 PR 9 起提供。 */
+    knowledgeBase: z.object({
+        /** 每块的目标字符数;修改后文件在下一次索引时重新分块。 */
+        chunkChars: z.number().int().min(200).max(4000),
+    }),
 });
 export type Settings = z.infer<typeof Settings>;
 
 export const SettingsPatch = Settings.partial().extend({
     memory: Settings.shape.memory.partial().optional(),
+    knowledgeBase: Settings.shape.knowledgeBase.partial().optional(),
 });
 export type SettingsPatch = z.infer<typeof SettingsPatch>;
 
@@ -32,4 +38,5 @@ export const DEFAULT_SETTINGS: Settings = {
     locale: 'zh-CN',
     theme: 'system',
     memory: { autoExtract: false },
+    knowledgeBase: { chunkChars: 1000 },
 };

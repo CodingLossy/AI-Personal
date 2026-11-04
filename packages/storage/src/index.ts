@@ -22,6 +22,7 @@ export {
     VECTOR_TABLE,
     type VectorMatch,
 } from './embeddings.js';
+export type { KbChunk, KbChunkInput, KbFile, KbRepository, KbSource } from './kb.js';
 export { ItemCycleError, type ItemInput, type ItemRepository } from './items.js';
 export {
     checksum,
