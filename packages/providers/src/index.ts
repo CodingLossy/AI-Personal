@@ -2,6 +2,14 @@
 // Copyright (C) 2026 尹绪柏 (Theodore Yin)
 
 export {
+    ANTHROPIC_BASE_URL,
+    ANTHROPIC_VERSION,
+    createAnthropicProvider,
+    toAnthropicMessages,
+    type NativeProviderOptions,
+} from './anthropic.js';
+export { createGeminiProvider, GEMINI_BASE_URL, toGeminiContents, toGeminiSchema } from './gemini.js';
+export {
     classifyStatus,
     createOpenAICompatibleProvider,
     toWireToolName,

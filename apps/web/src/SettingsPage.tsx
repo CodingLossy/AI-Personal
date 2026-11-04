@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 尹绪柏 (Theodore Yin)
 
-import type { ModelProfile, ModelPurpose, Settings, SettingsPatch } from '@ai-personal/shared';
+import type { ModelKind, ModelProfile, ModelPurpose, Settings, SettingsPatch } from '@ai-personal/shared';
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { api, errorText } from './api.js';
 import { useI18n } from './i18n.js';
@@ -9,7 +9,16 @@ import { isValidKeyRef } from './live-turn.js';
 
 const PURPOSES: ModelPurpose[] = ['chat', 'cheap'];
 
+const KINDS: ModelKind[] = ['openai-compatible', 'anthropic', 'gemini'];
+
+/** 原生类型的默认接口地址(与服务器端适配器一致),留空即可。 */
+const DEFAULT_BASE_URLS: Partial<Record<ModelKind, string>> = {
+    anthropic: 'https://api.anthropic.com/v1',
+    gemini: 'https://generativelanguage.googleapis.com/v1beta',
+};
+
 interface Draft {
+    kind: ModelKind;
     label: string;
     baseURL: string;
     model: string;
@@ -17,7 +26,14 @@ interface Draft {
     purpose: ModelPurpose[];
 }
 
-const emptyDraft: Draft = { label: '', baseURL: '', model: '', apiKeyRef: '', purpose: ['chat'] };
+const emptyDraft: Draft = {
+    kind: 'openai-compatible',
+    label: '',
+    baseURL: '',
+    model: '',
+    apiKeyRef: '',
+    purpose: ['chat'],
+};
 
 function ProfileForm({
     initial,
@@ -53,14 +69,24 @@ function ProfileForm({
                 <input name="label" value={d.label} onChange={(e) => setD({ ...d, label: e.target.value })} required />
             </label>
             <label>
+                {t('models.kind')}
+                <select name="kind" value={d.kind} onChange={(e) => setD({ ...d, kind: e.target.value as ModelKind })}>
+                    {KINDS.map((k) => (
+                        <option key={k} value={k}>
+                            {k}
+                        </option>
+                    ))}
+                </select>
+            </label>
+            <label>
                 {t('models.baseURL')}
                 <input
                     name="baseURL"
                     type="url"
-                    placeholder="https://api.deepseek.com/v1"
+                    placeholder={DEFAULT_BASE_URLS[d.kind] ?? 'https://api.deepseek.com/v1'}
                     value={d.baseURL}
                     onChange={(e) => setD({ ...d, baseURL: e.target.value })}
-                    required
+                    required={d.kind === 'openai-compatible'}
                 />
             </label>
             <label>
@@ -127,8 +153,8 @@ function ModelProfiles({ onChanged }: { onChanged: (profiles: ModelProfile[]) =>
     const save = async (id: string | null, d: Draft) => {
         const body = {
             label: d.label,
-            kind: 'openai-compatible' as const,
-            baseURL: d.baseURL,
+            kind: d.kind,
+            ...(d.baseURL.trim() ? { baseURL: d.baseURL.trim() } : {}),
             model: d.model,
             apiKeyRef: d.apiKeyRef === '' ? null : d.apiKeyRef,
             purpose: d.purpose,
@@ -171,6 +197,7 @@ function ModelProfiles({ onChanged }: { onChanged: (profiles: ModelProfile[]) =>
                             <ProfileForm
                                 initial={{
                                     label: p.label,
+                                    kind: p.kind,
                                     baseURL: p.baseURL ?? '',
                                     model: p.model,
                                     apiKeyRef: p.apiKeyRef ?? '',
@@ -189,7 +216,8 @@ function ModelProfiles({ onChanged }: { onChanged: (profiles: ModelProfile[]) =>
                                 </span>
                             </div>
                             <div className="small muted">
-                                {p.model} · {p.baseURL ?? p.kind} · {p.apiKeyRef ?? '—'} · {p.purpose.join(', ')}
+                                {p.kind} · {p.model} · {p.baseURL ?? DEFAULT_BASE_URLS[p.kind] ?? ''} ·{' '}
+                                {p.apiKeyRef ?? '—'} · {p.purpose.join(', ')}
                             </div>
                             <div className="row">
                                 <button type="button" onClick={() => void test(p)}>
