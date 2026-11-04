@@ -131,6 +131,45 @@ describe('OpenAI 兼容流式(录制回放)', () => {
     });
 });
 
+describe('OpenAI 兼容嵌入 /embeddings(回放)', () => {
+    it('按 index 排回输入顺序,返回模型名与 usage', async () => {
+        const replay = createReplayFetch(loadFixture(fixture('embeddings')));
+        const { p } = provider(replay.fetch, { purpose: ['embed'], model: 'text-embedding-3-small' });
+        const result = await p.embed!(['苹果', 'banana']);
+        expect(result.vectors.map((v) => [...v])).toEqual([
+            [1, 0, 0, 0],
+            [0, 1, 0, 0],
+        ]);
+        expect(result).toMatchObject({ model: 'text-embedding-3-small', usage: { inputTokens: 6, totalTokens: 6 } });
+        expect(replay.calls[0]!.body).toEqual({
+            model: 'text-embedding-3-small',
+            input: ['苹果', 'banana'],
+            encoding_format: 'float',
+        });
+    });
+
+    it('条数不符、维度不一致、批量越界与上游错误都报错', async () => {
+        const json = (data: unknown) => () =>
+            new Response(JSON.stringify({ data }), { headers: { 'content-type': 'application/json' } });
+        const short = provider(stubFetch(json([{ index: 0, embedding: [1, 2] }])).fetch);
+        await expect(short.p.embed!(['a', 'b'])).rejects.toMatchObject({ code: 'upstream_error' });
+        const ragged = provider(
+            stubFetch(
+                json([
+                    { index: 0, embedding: [1, 2] },
+                    { index: 1, embedding: [1] },
+                ]),
+            ).fetch,
+        );
+        await expect(ragged.p.embed!(['a', 'b'])).rejects.toMatchObject({ code: 'upstream_error' });
+        const none = provider(stubFetch().fetch);
+        await expect(none.p.embed!([])).rejects.toMatchObject({ code: 'bad_request' });
+        await expect(none.p.embed!(new Array<string>(65).fill('x'))).rejects.toMatchObject({ code: 'bad_request' });
+        const unauthorized = provider(stubFetch(() => new Response('{"error":"bad key"}', { status: 401 })).fetch);
+        await expect(unauthorized.p.embed!(['a'])).rejects.toMatchObject({ code: 'auth_failed' });
+    });
+});
+
 describe('DeepSeek 真实录制(回放)', () => {
     const deepseek = (over: Partial<ProviderProfile> = {}) =>
         profile({ baseURL: 'https://api.deepseek.com/v1', model: 'deepseek-chat', ...over });

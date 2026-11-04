@@ -18,7 +18,9 @@ import {
     type ChatChunk,
     type ChatMessage,
     type ChatRequest,
+    type EmbedResult,
     type FinishReason,
+    MAX_EMBED_BATCH,
     type ModelProvider,
     ProviderError,
     type ProviderProfile,
@@ -237,5 +239,57 @@ export function createOpenAICompatibleProvider(options: OpenAICompatibleOptions)
         });
     }
 
-    return { profileId: profile.id, stream, test };
+    /** POST /embeddings(ADR 0014):按 index 排回输入顺序,校验条数与维度一致。 */
+    async function embed(texts: string[], signal?: AbortSignal): Promise<EmbedResult> {
+        if (texts.length === 0 || texts.length > MAX_EMBED_BATCH) {
+            throw new ProviderError('bad_request', `embed accepts 1 to ${MAX_EMBED_BATCH} texts`);
+        }
+        const controller = new AbortController();
+        const onAbort = () => controller.abort();
+        signal?.addEventListener('abort', onAbort, { once: true });
+        const timer = setTimeout(() => controller.abort(), options.firstTokenTimeoutMs ?? 60_000);
+        try {
+            const res = await http.post(
+                `${base}/embeddings`,
+                headers(),
+                { model: profile.model, input: texts, encoding_format: 'float' },
+                controller.signal,
+            );
+            const json = (await res.json()) as {
+                data?: { index?: unknown; embedding?: unknown }[];
+                model?: unknown;
+                usage?: unknown;
+            };
+            const vectors: Float32Array[] = new Array<Float32Array>(texts.length);
+            for (const [i, row] of (json.data ?? []).entries()) {
+                const index = typeof row.index === 'number' ? row.index : i;
+                if (!Array.isArray(row.embedding) || index < 0 || index >= texts.length) continue;
+                vectors[index] = Float32Array.from(row.embedding as number[]);
+            }
+            const dims = vectors[0]?.length ?? 0;
+            for (let i = 0; i < texts.length; i++) {
+                const v = vectors[i];
+                if (!v || v.length === 0 || v.length !== dims || v.some((x) => !Number.isFinite(x))) {
+                    throw new ProviderError('upstream_error', 'the embedding response is incomplete or malformed');
+                }
+            }
+            const usage = mapUsage(json.usage);
+            return {
+                vectors,
+                model: typeof json.model === 'string' && json.model ? json.model : profile.model,
+                ...(usage ? { usage } : {}),
+            };
+        } catch (error) {
+            if (error instanceof ProviderError) throw error;
+            if (controller.signal.aborted && !signal?.aborted) {
+                throw new ProviderError('timeout', 'the embedding request timed out');
+            }
+            throw http.networkError(error);
+        } finally {
+            clearTimeout(timer);
+            signal?.removeEventListener('abort', onAbort);
+        }
+    }
+
+    return { profileId: profile.id, stream, test, embed };
 }

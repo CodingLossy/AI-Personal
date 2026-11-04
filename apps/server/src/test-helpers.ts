@@ -15,6 +15,7 @@ import { createItemService } from '@ai-personal/items';
 import { createSummarizer, createToolRegistry } from './agent-setup.js';
 import { createApp, type AppDeps } from './app.js';
 import { createMcpControl } from './mcp-setup.js';
+import { createEmbeddingService, type EmbeddingService } from './embeddings.js';
 import { FailureLimiter } from './auth/rate-limit.js';
 import { createLogger } from './log.js';
 
@@ -25,6 +26,7 @@ export interface TestServer {
     app: ReturnType<typeof createApp>;
     bus: EventBus;
     runs: RunManager;
+    embeddings: EmbeddingService;
     dir: string;
     repos: Repositories;
     /** 本测试期间写出的全部日志行。 */
@@ -87,8 +89,10 @@ export async function createTestServer(
     });
     // MCP 子进程在 cleanup 时关闭
     const mcp = createMcpControl(runs.tools);
+    const embeddings = createEmbeddingService({ repos, providerFor, redact: (text) => redactor.redact(text) });
     const app = createApp({
         mcp,
+        embeddings,
         config: {
             sourceUrl: 'https://github.com/CodingLossy/AI-Personal',
             webDir: null,
@@ -112,11 +116,14 @@ export async function createTestServer(
         app,
         bus,
         runs,
+        embeddings,
         dir,
         repos,
         logs,
         async cleanup() {
             mcp.closeAll();
+            embeddings.stop();
+            await embeddings.idle();
             await runs.idle();
             conn.close();
             rmSync(dir, { recursive: true, force: true });

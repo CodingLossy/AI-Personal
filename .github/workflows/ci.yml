@@ -153,6 +153,12 @@ jobs:
             await import(m);
             row('+ ' + m.replace(/^.*node_modules\//, '').replace('/lib/index.js', ''));
           }
+          // sqlite-vec 只在配置了 embed 配置档时加载(ADR 0014):这里单独测加载后的增量,并确认扩展在镜像中可用
+          const { default: Database } = await import('/app/packages/storage/node_modules/better-sqlite3/lib/index.js');
+          const { load } = await import('/app/packages/storage/node_modules/sqlite-vec/index.mjs');
+          const db = new Database(':memory:');
+          load(db);
+          row('+ sqlite-vec ' + db.prepare('select vec_version() v').get().v);
           "
       - name: Show container status and logs
         if: failure()

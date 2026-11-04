@@ -11,6 +11,8 @@ import type {
     CreatedAccessToken,
     CreateSessionRequest,
     CreateTokenRequest,
+    EmbeddingRebuildResult,
+    EmbeddingStatus,
     FsRoot,
     FsRootInput,
     Item,
@@ -265,6 +267,13 @@ export function createClient(options: ClientOptions) {
             list: () => t.json<Page<FsRoot>>('/fs/roots'),
             add: (body: FsRootInput) => t.json<FsRoot>('/fs/roots', { method: 'POST', body }),
             remove: (id: string) => t.json<void>(`/fs/roots/${enc(id)}`, { method: 'DELETE' }),
+        },
+
+        embeddings: {
+            /** 嵌入配置档、向量索引与队列的状态(ADR 0014)。 */
+            status: () => t.json<EmbeddingStatus>('/embeddings/status'),
+            /** 删除向量索引并按当前 embed 配置档全部重新嵌入。 */
+            rebuild: () => t.json<EmbeddingRebuildResult>('/embeddings/rebuild', { method: 'POST' }),
         },
 
         mcpServers: {
