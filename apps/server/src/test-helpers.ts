@@ -10,6 +10,7 @@ import { EventBus, RunManager } from '@ai-personal/agent';
 import { createMemoryService } from '@ai-personal/memory';
 import { createProvider, type ModelProvider, Redactor, SecretStore } from '@ai-personal/providers';
 import { createRepositories, openStorage, type Repositories } from '@ai-personal/storage';
+import type { WebFetchOptions } from '@ai-personal/tools';
 import { createSummarizer, createToolRegistry } from './agent-setup.js';
 import { createApp, type AppDeps } from './app.js';
 import { FailureLimiter } from './auth/rate-limit.js';
@@ -41,6 +42,8 @@ export interface TestServerOptions {
     provider?: ModelProvider;
     /** 审批请求的有效期(审批过期测试用)。 */
     approvalTimeoutMs?: number;
+    /** web.fetch 的解析器与地址校验(测试中指向本机服务器)。 */
+    webFetch?: WebFetchOptions;
 }
 
 export async function createTestServer(
@@ -74,7 +77,7 @@ export async function createTestServer(
         bus,
         persistIntervalMs: 0,
         providerFor,
-        tools: createToolRegistry(memory),
+        tools: createToolRegistry(memory, options.webFetch ? { webFetch: options.webFetch } : {}),
         redact: (text) => redactor.redact(text),
         ...(options.approvalTimeoutMs ? { approvalTimeoutMs: options.approvalTimeoutMs } : {}),
         summarize: createSummarizer(repos, providerFor),

@@ -7,7 +7,7 @@ import { type ModelProvider, selectProfile } from '@ai-personal/providers';
 import { MemorySaveInput, MemorySearchInput } from '@ai-personal/shared';
 import { z } from 'zod';
 import type { ModelProfileRecord, Repositories } from '@ai-personal/storage';
-import { type ToolDefinition, ToolRegistry } from '@ai-personal/tools';
+import { type BuiltinToolOptions, createBuiltinTools, type ToolDefinition, ToolRegistry } from '@ai-personal/tools';
 
 const MAX_SUMMARY_CHARS = 2000;
 
@@ -125,7 +125,7 @@ export function createSummarizer(repos: Repositories, providerFor: (profile: Mod
     };
 }
 
-/** 组合根:M2 PR 2 中只有记忆工具,其余内置工具在后续 PR 中加入(ADR 0010)。 */
-export function createToolRegistry(memory: MemoryService): ToolRegistry {
-    return new ToolRegistry().register(...createMemoryTools(memory));
+/** 组合根:记忆工具与内置工具 time / calc / web.fetch(ADR 0010、M2 PR 3)。 */
+export function createToolRegistry(memory: MemoryService, builtin: BuiltinToolOptions = {}): ToolRegistry {
+    return new ToolRegistry().register(...createMemoryTools(memory), ...createBuiltinTools(builtin));
 }

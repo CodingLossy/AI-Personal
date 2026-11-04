@@ -14835,6 +14835,17 @@
                                 "domain"
                               ]
                             }
+                          },
+                          "requiredConstraint": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "enum": [
+                              "pathPrefix",
+                              "domain",
+                              null
+                            ]
                           }
                         },
                         "required": [
