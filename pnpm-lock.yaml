@@ -44,6 +44,9 @@ importers:
       '@ai-personal/agent':
         specifier: workspace:*
         version: link:../../packages/agent
+      '@ai-personal/memory':
+        specifier: workspace:*
+        version: link:../../packages/memory
       '@ai-personal/providers':
         specifier: workspace:*
         version: link:../../packages/providers
@@ -133,7 +136,14 @@ importers:
 
   packages/items: {}
 
-  packages/memory: {}
+  packages/memory:
+    dependencies:
+      '@ai-personal/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@ai-personal/storage':
+        specifier: workspace:*
+        version: link:../storage
 
   packages/plugin-sdk: {}
 

@@ -70,3 +70,11 @@ CREATE INDEX idx_mem_lookup ON memory_facts(owner_id, status, mem_type);
 - M2 只需增量迁移,不需要重建 M1 的表。
 - 记忆与知识地图共用 `items` / `item_edges` / `items_fts`,M1 就要承担这几张表的触发器与计数维护的最小实现。
 - 净室要求成为长期约束,PR 模板与 AGENTS.md 中都有体现。
+
+## 4. M1 落地情况(PR feat/context-memory)
+
+- `packages/storage` 的 `memories` 仓储:同类型同文本合并(置信度 +0.05)、单值 `entity_key` 先标旧值 `superseded` 再插入新值、trigram FTS 检索(1–2 字查询回退 `LIKE`)、编辑、撤回、硬删除(级联删除出处)。
+- `packages/memory`:凭据拒存的最小规则(API key、访问令牌、JWT、私钥、「密码是 …」类赋值、高熵串);`user.*` 与 `pref.*` 默认单值;初始置信度按来源。
+- 工具:`memory.save`(每次都需要用户审批,来源固定为当前会话)与 `memory.search`(只读)。审批端点 `POST /api/v1/approvals/{callId}`;等待审批时运行状态为 `waiting_approval`,取消运行即视为拒绝。
+- REST:`GET/POST /api/v1/memory`、`POST /api/v1/memory/search`、`GET/PATCH/DELETE /api/v1/memory/{id}`;用户经 REST 写入的记忆 `origin = user_explicit`,无需审批。
+- 上下文压缩:最近原文不超过上下文窗口的 40%(至少 2 条),更早的消息用 cheap 配置档(没有则用 chat)压缩成摘要段存入 `session_summaries`;压缩失败时丢弃最旧的消息,运行照常进行。
