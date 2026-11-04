@@ -24,6 +24,7 @@ import { memoryRoutes } from './routes/memory.js';
 import { modelRoutes } from './routes/models.js';
 import { runRoutes } from './routes/runs.js';
 import { settingsRoutes } from './routes/settings.js';
+import { fsRoutes } from './routes/fs.js';
 import { toolRoutes } from './routes/tools.js';
 import { sessionRoutes } from './routes/sessions.js';
 import { tokenRoutes } from './routes/tokens.js';
@@ -144,7 +145,8 @@ export function createApp(deps: AppDeps): OpenAPIHono<AppEnv> {
         .route('/', sessionRoutes(runDeps))
         .route('/', runRoutes(runDeps))
         .route('/', memoryRoutes({ repos, memory: deps.memory, detectCredential }))
-        .route('/', toolRoutes({ repos, runs: deps.runs, redact: deps.redact ?? ((text) => text) }));
+        .route('/', toolRoutes({ repos, runs: deps.runs, redact: deps.redact ?? ((text) => text) }))
+        .route('/', fsRoutes({ repos, redact: deps.redact ?? ((text) => text) }));
     app.route('/api/v1', v1);
 
     // OpenAPI 文档同样需要鉴权(业主决定;CI 另导出静态文件)

@@ -11,6 +11,8 @@ import type {
     CreatedAccessToken,
     CreateSessionRequest,
     CreateTokenRequest,
+    FsRoot,
+    FsRootInput,
     LoginRequest,
     LoginResponse,
     Me,
@@ -230,6 +232,13 @@ export function createClient(options: ClientOptions) {
                     method: 'POST',
                     body: { decision, ...(remember ? { remember } : {}) },
                 }),
+        },
+
+        fsRoots: {
+            /** 文件工具可以访问的授权目录(ADR 0011);只能由用户增删。 */
+            list: () => t.json<Page<FsRoot>>('/fs/roots'),
+            add: (body: FsRootInput) => t.json<FsRoot>('/fs/roots', { method: 'POST', body }),
+            remove: (id: string) => t.json<void>(`/fs/roots/${enc(id)}`, { method: 'DELETE' }),
         },
 
         preauthorizations: {

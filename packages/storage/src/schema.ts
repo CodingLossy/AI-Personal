@@ -39,6 +39,7 @@ export const TABLE_COLUMNS = {
         'expires_at',
         'decided_at',
     ],
+    fs_roots: ['id', 'owner_id', 'path', 'label', 'created_at'],
     tool_preauth: [
         'id',
         'owner_id',

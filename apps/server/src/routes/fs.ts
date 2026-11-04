@@ -1,0 +1,93 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 尹绪柏 (Theodore Yin)
+
+// 授权目录的 REST(ADR 0011 第 1 节):只有用户能增删,没有对应的工具。
+import { createRoute, z } from '@hono/zod-openapi';
+import { FsRoot, FsRootInput, Id, pageOf } from '@ai-personal/shared';
+import type { Repositories } from '@ai-personal/storage';
+import { inputDigest, isWithin, normalizeRoot, PathError } from '@ai-personal/tools';
+import { requireOwner } from '../auth/middleware.js';
+import { ApiError, notFound } from '../errors.js';
+import { authErrors, json, problem, router } from './common.js';
+
+const listRoute = createRoute({
+    method: 'get',
+    path: '/fs/roots',
+    tags: ['tools'],
+    summary: 'List the folders the file tools may access',
+    responses: { 200: json(pageOf(FsRoot), 'Authorized folders'), ...authErrors },
+});
+
+const createRootRoute = createRoute({
+    method: 'post',
+    path: '/fs/roots',
+    tags: ['tools'],
+    summary: 'Authorize a folder; the server stores its real path (realpath)',
+    request: { body: { content: { 'application/json': { schema: FsRootInput } }, required: true } },
+    responses: {
+        201: json(FsRoot, 'Authorized'),
+        400: problem('Not a folder, a whole drive, a network path or otherwise not allowed'),
+        409: problem('Already authorized'),
+        ...authErrors,
+    },
+});
+
+const deleteRoute = createRoute({
+    method: 'delete',
+    path: '/fs/roots/{id}',
+    tags: ['tools'],
+    summary: 'Revoke a folder; file-tool pre-authorizations inside it are removed too',
+    request: { params: z.object({ id: Id }) },
+    responses: { 204: { description: 'Revoked' }, 404: problem('Not found'), ...authErrors },
+});
+
+export function fsRoutes(deps: { repos: Repositories; redact: (text: string) => string }) {
+    const { repos } = deps;
+    return router()
+        .openapi(listRoute, (c) => c.json({ items: repos.fsRoots.list(requireOwner(c)), nextCursor: null }, 200))
+        .openapi(createRootRoute, (c) => {
+            const ownerId = requireOwner(c);
+            const body = c.req.valid('json');
+            let real: string;
+            try {
+                real = normalizeRoot(body.path);
+            } catch (error) {
+                const message = error instanceof PathError ? error.message : 'The folder cannot be used.';
+                throw new ApiError(400, 'validation_failed', 'Bad Request', message, {
+                    issues: [{ path: ['path'], message }],
+                });
+            }
+            if (repos.fsRoots.list(ownerId).some((r) => isWithin(r.path, real) && isWithin(real, r.path))) {
+                throw new ApiError(409, 'conflict', 'Conflict', 'This folder is already authorized.');
+            }
+            const root = repos.fsRoots.create(ownerId, { path: real, label: body.label?.trim() || real });
+            c.get('logger').info({ rootId: root.id }, 'folder authorized');
+            return c.json(root, 201);
+        })
+        .openapi(deleteRoute, (c) => {
+            const ownerId = requireOwner(c);
+            const { id } = c.req.valid('param');
+            const root = repos.fsRoots.get(ownerId, id);
+            if (!root || !repos.fsRoots.delete(ownerId, id)) throw notFound('Authorized folder');
+            // 撤销目录时,路径前缀落在它里面的文件工具预授权一并删除(ADR 0010 第 3 节、ADR 0011 第 1 节)
+            for (const p of repos.preauths.list(ownerId)) {
+                const prefix = p.constraint?.pathPrefix;
+                if (!p.toolName.startsWith('fs.') || !prefix || !isWithin(prefix, root.path)) continue;
+                repos.preauths.delete(ownerId, p.id);
+                repos.audit.append(ownerId, {
+                    action: 'preauth-revoked',
+                    toolName: p.toolName,
+                    risk: 'write',
+                    callId: null,
+                    runId: null,
+                    sessionId: p.sessionId,
+                    decision: null,
+                    outcome: 'ok',
+                    summary: `Revoked pre-authorization for ${p.toolName} because its folder was removed`,
+                    inputDigest: inputDigest(p.constraint, deps.redact),
+                    error: null,
+                });
+            }
+            return c.body(null, 204);
+        });
+}

@@ -77,7 +77,7 @@ export async function createTestServer(
         bus,
         persistIntervalMs: 0,
         providerFor,
-        tools: createToolRegistry(memory, options.webFetch ? { webFetch: options.webFetch } : {}),
+        tools: createToolRegistry(memory, repos, options.webFetch ? { webFetch: options.webFetch } : {}),
         redact: (text) => redactor.redact(text),
         ...(options.approvalTimeoutMs ? { approvalTimeoutMs: options.approvalTimeoutMs } : {}),
         summarize: createSummarizer(repos, providerFor),

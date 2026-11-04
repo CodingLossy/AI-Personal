@@ -15,13 +15,14 @@ import { type ModelProfileRecord, newId, type Repositories } from '@ai-personal/
 import type { EventBus } from './bus.js';
 import { DEFAULT_CONTEXT_WINDOW, planContext, SUMMARY_PREFIX, textOf, toChatMessage, transcript } from './context.js';
 import {
-    checkRemember,
     decide,
     inputDigest,
     isPreauthorizable,
+    prepareRemember,
     redactedInput,
     type ToolContext,
     type ToolDefinition,
+    ToolDeniedError,
     type ToolRegistry,
 } from '@ai-personal/tools';
 import type { ApprovalOutcome } from './tools.js';
@@ -187,21 +188,25 @@ export class RunManager {
         const pending = this.approvals.get(callId);
         const request = repos.approvals.get(ownerId, callId);
         if (!pending || pending.ownerId !== ownerId || !request || request.status !== 'pending') return 'not_pending';
+        let saved: PreauthRemember | undefined;
         if (remember) {
             if (decision !== 'approve') return { invalid: 'remember is only allowed when approving' };
             const tool = this.options.tools?.get(request.toolName);
-            const problem = tool ? checkRemember(tool, remember) : 'the tool is no longer available';
-            if (problem) return { invalid: problem };
+            if (!tool) return { invalid: 'the tool is no longer available' };
+            // 约束先规范化再保存(例如路径先 realpath,ADR 0011 第 4 节)
+            const prepared = prepareRemember(tool, remember, { ownerId });
+            if ('error' in prepared) return { invalid: prepared.error };
+            saved = prepared.ok;
         }
         if (!repos.approvals.decide(ownerId, callId, decision === 'approve' ? 'approved' : 'rejected')) {
             return 'not_pending';
         }
-        if (remember) {
+        if (saved) {
             const preauth = repos.preauths.create(ownerId, {
                 toolName: request.toolName,
-                scope: remember.scope,
+                scope: saved.scope,
                 sessionId: request.sessionId,
-                constraint: remember.constraint ?? null,
+                constraint: saved.constraint ?? null,
             });
             this.audit(ownerId, {
                 action: 'preauth-created',
@@ -568,6 +573,11 @@ export class RunManager {
                                 output = await tool.execute(call.input, toolContext());
                             } catch (e) {
                                 error = e instanceof Error ? e.message : String(e);
+                                // 工具判定越权(如路径在授权目录外):按拒绝审计,read 工具也一样
+                                if (e instanceof ToolDeniedError) {
+                                    auditDecision = 'denied';
+                                    approved = false;
+                                }
                             }
                             if (tool.untrustedOutput) untrustedContentSeen = true;
                         }

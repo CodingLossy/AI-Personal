@@ -3,7 +3,7 @@
 
 import type { AgentEvent, EventEnvelope, ToolInfo } from '@ai-personal/shared';
 import { describe, expect, it } from 'vitest';
-import { rememberConstraint } from './remember.js';
+import { parentFolder, rememberConstraint } from './remember.js';
 import { applyEvent, isValidKeyRef, newTurn, pendingApprovals } from './live-turn.js';
 
 const RUN = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
@@ -107,5 +107,33 @@ describe('rememberConstraint', () => {
         expect(rememberConstraint(info({}), {})).toBeNull();
         expect(rememberConstraint(info({ constraints: [], requiredConstraint: null }), {})).toBeUndefined();
         expect(rememberConstraint(undefined, {})).toBeUndefined();
+    });
+});
+
+describe('按目录预授权(文件工具)', () => {
+    const fsInfo: ToolInfo = {
+        name: 'fs.write',
+        description: '',
+        risk: 'write',
+        approval: 'required',
+        source: 'builtin',
+        server: null,
+        preauthorizable: true,
+        constraints: ['pathPrefix'],
+        requiredConstraint: 'pathPrefix',
+    };
+
+    it('取目标所在的文件夹;移动时取目标的文件夹;取不出时不能记住', () => {
+        expect(rememberConstraint(fsInfo, { path: 'D:\\Docs\\notes\\a.md' })).toEqual({
+            pathPrefix: 'D:\\Docs\\notes',
+        });
+        expect(rememberConstraint(fsInfo, { from: '/a/x', to: '/home/u/docs/y.md' })).toEqual({
+            pathPrefix: '/home/u/docs',
+        });
+        expect(rememberConstraint(fsInfo, { path: 'a.md' })).toBeNull();
+        expect(parentFolder('C:\\file.txt')).toBe('C:\\');
+        expect(parentFolder('/file')).toBe('/');
+        expect(parentFolder('notes/a.md')).toBe('notes');
+        expect(parentFolder('D:\\Docs\\')).toBe('D:\\');
     });
 });

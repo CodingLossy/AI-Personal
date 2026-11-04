@@ -3,6 +3,14 @@
 
 import type { PreauthConstraintKind, ToolRisk } from '@ai-personal/shared';
 
+/**
+ * 工具在执行中发现请求越权(例如路径在授权目录之外)时抛出的错误:core 把这次调用按「拒绝」审计,
+ * 即使工具是 read 级别(ADR 0010 第 6 节、ADR 0011)。
+ */
+export class ToolDeniedError extends Error {
+    override readonly name: string = 'ToolDeniedError';
+}
+
 /** 工具执行时由 core 提供的上下文;其中的事实都来自 core,不来自模型。 */
 export interface ToolContext {
     ownerId: string;
@@ -36,7 +44,14 @@ export interface ToolDefinition {
     /** 输出可能包含外部内容(网页、文件、MCP 输出);执行后本次运行的条件预授权失效。 */
     untrustedOutput?: boolean;
     /** 预授权支持的参数约束:从入参中取出规范化的值,取不出时返回 null(此时约束不匹配)。 */
-    constraints?: Partial<Record<PreauthConstraintKind, (input: unknown) => string | null>>;
+    constraints?: Partial<Record<PreauthConstraintKind, (input: unknown, context: ToolContext) => string | null>>;
+    /**
+     * 保存预授权之前,把客户端传来的约束值规范化(例如路径先 realpath,ADR 0011 第 4 节);不合法时抛错。
+     * 没有提供时按原样保存。
+     */
+    normalizeConstraint?: Partial<
+        Record<PreauthConstraintKind, (value: string, context: { ownerId: string }) => string>
+    >;
     /** 预授权时必须带这种约束(例如 web.fetch 只能按域名预授权,不能整体预授权)。 */
     requireConstraint?: PreauthConstraintKind;
     /** 条件预授权:只能依据 core 已知的事实计算(ADR 0010 第 4 节)。 */
