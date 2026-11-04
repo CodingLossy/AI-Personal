@@ -27,6 +27,13 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ai-personal/shared": "workspace:*",
+    "@ai-personal/storage": "workspace:*",
+    "@ai-personal/tools": "workspace:*",
+    "zod": "^4.6.7"
   }
 }
