@@ -12,7 +12,8 @@ export default defineConfig({
         host: '127.0.0.1',
         port: 5173,
         proxy: {
-            '/api': SERVER,
+            // ws: true 让开发时的 /api/v1/ws(审批面板的实时事件)也经过代理
+            '/api': { target: SERVER, ws: true },
             '/healthz': SERVER,
         },
     },

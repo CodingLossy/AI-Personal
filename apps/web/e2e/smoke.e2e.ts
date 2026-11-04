@@ -168,6 +168,8 @@ test('初始化、配置档、流式中刷新、审批与记忆管理', async ({
     enqueue('memory-save-roundtrip');
     await composer.fill('记住我住杭州');
     await composer.press('Enter');
+    // 批准时选择「总是允许」:之后可以在设置中看到并撤销(ADR 0010 第 3 节)
+    await page.getByRole('combobox', { name: '记住这个决定' }).selectOption('always');
     await page.getByRole('button', { name: '批准' }).click();
     await expect(page.locator('.message.assistant').last()).toContainText('好的,我记住了。');
 
@@ -182,4 +184,17 @@ test('初始化、配置档、流式中刷新、审批与记忆管理', async ({
     await expect(page.locator('.memory-text')).toHaveText('用户常住杭州西湖区');
     await page.locator('.memory').getByRole('button', { name: '删除' }).click();
     await expect(page.getByText('还没有记忆。')).toBeVisible();
+
+    // 审计页:拒绝、批准与新增预授权都有记录
+    await page.getByRole('link', { name: '审计' }).click();
+    await expect(page.locator('.audit-table tbody tr')).toHaveCount(3);
+    await expect(page.locator('.audit-table')).toContainText('已拒绝');
+    await expect(page.locator('.audit-table')).toContainText('新增预授权');
+
+    // 设置页:撤销预授权
+    await page.getByRole('link', { name: '设置' }).click();
+    const preauth = page.locator('[data-preauth="memory.save"]');
+    await expect(preauth).toContainText('总是允许');
+    await preauth.getByRole('button', { name: '撤销' }).click();
+    await expect(page.getByText('还没有预授权。')).toBeVisible();
 });
