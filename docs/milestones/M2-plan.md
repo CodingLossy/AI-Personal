@@ -1,6 +1,6 @@
 # M2 实施方案:工具框架 + 本地文件 + 记忆 v2
 
-- 状态:草案,待业主决定第 6 节的问题后再开始写代码
+- 状态:已批准(业主 2026-11-04 按建议决定第 6 节全部问题);进度:PR 1–6 已合并(#15–#20)
 - 修订:2026-11-04 应业主要求精简范围以节省额度:原 PR 10 与 11 合并(共 15 个 PR),部分功能推迟,见第 7 节「M2 后续改善(推迟项)」;安全、审计、净室与验收 ①–⑧ 不降级
 - 日期:2026-11-04
 - 基线:`main` @ `beec737`(M1 已全部合并,#1–#13)
@@ -15,7 +15,7 @@ M2 有三块,按业主建议的顺序推进:先做所有工具都要用的**工�
 | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
 | A 工具框架与审批 | Tool Registry、风险分级、审批策略与预授权、审批持久化、审计日志、外部内容的「不可信」标记、跨会话的审批弹窗                                                    | 计划 M2 第 1 条、第 7 节  |
 | B 内置工具与文件 | `time`、`calc`、`web.fetch`;授权目录与 `fs.*`;文档解析(Markdown、PDF、DOCX、XLSX,图片待定);条目索引 v1 与最简树形浏览;MCP 客户端;本地知识库(嵌入 + sqlite-vec) | 计划 M2 第 2–6 条、6.2 节 |
-| C 记忆 v2        | 迁移与 v1→v2 数据迁移、完整写入路径、三路召回 + RRF + 可信度说明 + 预算、digest、维护任务、反馈、REST 全集、`memory` ItemProvider、Web 记忆页                  | 补充设计第 9 节、ADR 0007 |
+| C 记忆 v2        | 迁移与 v1→v2 数据迁移、完整写入路径、三路召回 + RRF + 可信度说明 + 预算、digest、维护任务、反馈、REST(除 export)、`memory` ItemProvider、Web 记忆页            | 补充设计第 9 节、ADR 0007 |
 
 **不在 M2**:邮件(M3)、语音(M4)、渠道与知识地图分类浏览器完整版(M5)、通用定时任务(M6;M2 只有记忆维护用的最小调度器)、`shell` 工具(默认关闭,本里程碑不实现)、粒子球与会话地图画布(M10)。
 
@@ -38,7 +38,7 @@ M2 有三块,按业主建议的顺序推进:先做所有工具都要用的**工�
 | 3   | `feat/builtin-tools`              | B   | `time`、`calc`、`web.fetch`(SSRF 防护)                                                                        | 2     |
 | 4   | `feat/fs-tools`                   | B   | 授权目录、路径校验、`fs.list/read/search/write/move`                                                          | 2     |
 | 5   | `feat/doc-parsing`                | B   | Markdown / PDF / DOCX / XLSX 解析,worker 中按需加载                                                           | 4     |
-| 6   | `feat/items-index`                | B   | ADR 0011(条目 API)、ItemProvider、`files` / `novels` / `sessions` 提供者、REST、`items.*`、最简树形浏览       | 4     |
+| 6   | `feat/items-index`                | B   | ADR 0012(条目 API)、ItemProvider、`files` / `novels` / `sessions` 提供者、REST、`items.*`、最简树形浏览       | 4     |
 | 7   | `feat/mcp-client`                 | B   | stdio 客户端,工具注册进 Registry(Streamable HTTP 推迟)                                                        | 2     |
 | 8   | `feat/embeddings`                 | B   | 模型网关嵌入接口(OpenAI 兼容)、sqlite-vec、按维度建表、嵌入队列 worker                                        | —     |
 | 9   | `feat/knowledge-base`             | B   | 授权目录分块 → 嵌入 → 检索,引用显示文件名与页码                                                               | 5、8  |
@@ -98,6 +98,7 @@ M2 有三块,按业主建议的顺序推进:先做所有工具都要用的**工�
 
 ### PR 4 · `feat/fs-tools`
 
+- ADR 0011(fs 工具):路径校验规则与授权目录。
 - 授权目录列表:存在设置中,只能由用户经 API / UI 增删,模型不能修改。
 - 路径校验:先规范化,再取 `realpath`,并检查符号链接与 junction 逃逸。Windows 特有情况:
   - 盘符大小写;
@@ -123,7 +124,7 @@ M2 有三块,按业主建议的顺序推进:先做所有工具都要用的**工�
 
 ### PR 6 · `feat/items-index`
 
-- ADR 0011:条目 REST 的分页、计数一致性、可见性规则。
+- ADR 0012:条目 REST 的分页、计数一致性、可见性规则。
 - `ItemProvider` 接口,以及三个内置提供者:
   - `files`:登记授权目录;
   - `novels`:按章节切分 txt;
@@ -255,7 +256,7 @@ M2 有三块,按业主建议的顺序推进:先做所有工具都要用的**工�
 ### PR 14 · `feat/memory-api-ui`
 
 - 反馈 `helpful` / `stale` / `wrong` / `sensitive`:同一条记忆、同一信号,每个运行只计一次;本地评测数据不外传。
-- REST 全集(补充设计第 8 节):`retrieve`、`digest`、`feedback`、`sources`、`history`、`conflicts`、`quarantine`(`export` 推迟)。
+- REST(除 export,补充设计第 8 节):`retrieve`、`digest`、`feedback`、`sources`、`history`、`conflicts`、`quarantine`(`export` 推迟)。
 - 工具 `memory.digest`、`memory.feedback`、`memory.forget`(每次都要审批)。
 - `memory` ItemProvider。会话 fork API、`GET /sessions/map` 与 Web 代码高亮推迟,见第 7 节。
 - Web:
