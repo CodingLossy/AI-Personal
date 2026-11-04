@@ -85,7 +85,13 @@ export function ApprovalPanel({ currentSessionId }: { currentSessionId: string |
                                     {t('approvals.expires', { time: new Date(a.expiresAt).toLocaleTimeString() })}
                                 </span>
                             </div>
-                            <ApprovalActions callId={a.callId} risk={a.risk} onDecided={() => void reload()} />
+                            <ApprovalActions
+                                callId={a.callId}
+                                risk={a.risk}
+                                toolName={a.toolName}
+                                input={a.input}
+                                onDecided={() => void reload()}
+                            />
                         </li>
                     ))}
                 </ul>

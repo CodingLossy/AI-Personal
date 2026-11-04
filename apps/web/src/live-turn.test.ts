@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 尹绪柏 (Theodore Yin)
 
-import type { AgentEvent, EventEnvelope } from '@ai-personal/shared';
+import type { AgentEvent, EventEnvelope, ToolInfo } from '@ai-personal/shared';
 import { describe, expect, it } from 'vitest';
+import { rememberConstraint } from './remember.js';
 import { applyEvent, isValidKeyRef, newTurn, pendingApprovals } from './live-turn.js';
 
 const RUN = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
@@ -81,5 +82,30 @@ describe('isValidKeyRef', () => {
         expect(isValidKeyRef('sk-THISISNOTAREALKEY0123456789abcdef')).toBe(false);
         expect(isValidKeyRef('env:')).toBe(false);
         expect(isValidKeyRef('env:A B')).toBe(false);
+    });
+});
+
+describe('rememberConstraint', () => {
+    const info = (over: Partial<ToolInfo>): ToolInfo => ({
+        name: 'web.fetch',
+        description: '',
+        risk: 'read',
+        approval: 'required',
+        source: 'builtin',
+        server: null,
+        preauthorizable: true,
+        constraints: ['domain'],
+        requiredConstraint: 'domain',
+        ...over,
+    });
+
+    it('按域名预授权:取本次网址的主机名;取不出时不能记住;工具不支持约束时整体预授权', () => {
+        expect(rememberConstraint(info({}), { url: 'https://Docs.Example.com/a?b' })).toEqual({
+            domain: 'docs.example.com',
+        });
+        expect(rememberConstraint(info({}), { url: 'not a url' })).toBeNull();
+        expect(rememberConstraint(info({}), {})).toBeNull();
+        expect(rememberConstraint(info({ constraints: [], requiredConstraint: null }), {})).toBeUndefined();
+        expect(rememberConstraint(undefined, {})).toBeUndefined();
     });
 });
