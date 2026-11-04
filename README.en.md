@@ -47,6 +47,17 @@ curl -X POST http://127.0.0.1:8787/api/v1/auth/setup   -H 'content-type: applica
 
 Direct local requests need no setup code. From another machine or through a reverse proxy, add `"setupCode"` to the request; the code is printed in the server log on startup (`docker logs` in Docker).
 
+You can also set up and chat entirely from the command-line client, without the Web UI (after `pnpm build`, run it in `apps/cli` or via `pnpm --filter @ai-personal/cli exec ai-personal …`):
+
+```bash
+ai-personal setup -u owner          # create the owner and save a personal access token (~/.ai-personal/cli.json, mode 0600)
+ai-personal models add --label deepseek --base-url https://api.deepseek.com/v1 --model deepseek-chat --key-ref env:DEEPSEEK_API_KEY
+ai-personal ask "Explain AGPL section 13 in three sentences"
+ai-personal chat                    # interactive chat: /new /model /retry /exit; Ctrl+C stops the current reply
+```
+
+Keys are only accepted as `env:` / `file:` references, never in plain text. Tool calls that need approval (such as `memory.save`) are asked about in a terminal and rejected when not interactive, unless you pass `--approve-tools`.
+
 Please read [CONTRIBUTING.md](CONTRIBUTING.md) before contributing.
 
 ## License

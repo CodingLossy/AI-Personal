@@ -47,6 +47,17 @@ curl -X POST http://127.0.0.1:8787/api/v1/auth/setup   -H 'content-type: applica
 
 从本机直连时不需要设置码;从其他机器或经过反向代理初始化时,需要在请求中加上 `"setupCode"`,它打印在服务启动日志里(Docker 中用 `docker logs` 查看)。
 
+也可以完全用命令行客户端完成初始化与对话(不需要 Web UI;`pnpm build` 后在 `apps/cli` 中运行,或 `pnpm --filter @ai-personal/cli exec ai-personal …`):
+
+```bash
+ai-personal setup -u owner          # 创建主人账户并保存个人访问令牌(~/.ai-personal/cli.json,权限 0600)
+ai-personal models add --label deepseek --base-url https://api.deepseek.com/v1 --model deepseek-chat --key-ref env:DEEPSEEK_API_KEY
+ai-personal ask "用三句话解释 AGPL 第 13 条"
+ai-personal chat                    # 交互式聊天:/new /model /retry /exit,Ctrl+C 中断当前回复
+```
+
+密钥只能以 `env:` / `file:` 引用的形式填写,不接受明文。需要审批的工具调用(如 `memory.save`)会在终端里询问,非交互时默认拒绝,除非加 `--approve-tools`。
+
 参与开发请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 许可证
