@@ -11,6 +11,7 @@ import { createMemoryService } from '@ai-personal/memory';
 import { createProvider, type ModelProvider, Redactor, SecretStore } from '@ai-personal/providers';
 import { createRepositories, openStorage, type Repositories } from '@ai-personal/storage';
 import type { WebFetchOptions } from '@ai-personal/tools';
+import { createItemService } from '@ai-personal/items';
 import { createSummarizer, createToolRegistry } from './agent-setup.js';
 import { createApp, type AppDeps } from './app.js';
 import { FailureLimiter } from './auth/rate-limit.js';
@@ -71,13 +72,14 @@ export async function createTestServer(
     const providerFor = (profile: Parameters<typeof createProvider>[0]) =>
         options.provider ?? createProvider(profile, providerDeps);
     const memory = createMemoryService(repos);
+    const items = createItemService({ repos });
     const bus = new EventBus();
     const runs = new RunManager({
         repos,
         bus,
         persistIntervalMs: 0,
         providerFor,
-        tools: createToolRegistry(memory, repos, options.webFetch ? { webFetch: options.webFetch } : {}),
+        tools: createToolRegistry(memory, repos, items, options.webFetch ? { webFetch: options.webFetch } : {}),
         redact: (text) => redactor.redact(text),
         ...(options.approvalTimeoutMs ? { approvalTimeoutMs: options.approvalTimeoutMs } : {}),
         summarize: createSummarizer(repos, providerFor),
@@ -95,6 +97,7 @@ export async function createTestServer(
         secrets,
         providerDeps,
         bus,
+        items,
         redact: (text) => redactor.redact(text),
         runs,
         memory,

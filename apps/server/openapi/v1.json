@@ -18104,6 +18104,4197 @@
           }
         }
       }
+    },
+    "/api/v1/items/roots": {
+      "get": {
+        "tags": [
+          "items"
+        ],
+        "summary": "Top-level categories of the knowledge map (syncs first when stale)",
+        "responses": {
+          "200": {
+            "description": "Root categories",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "category",
+                              "content"
+                            ]
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "source": {
+                            "type": "string"
+                          },
+                          "sourceRef": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "summary": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "icon": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "color": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "childCount": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "descendantCount": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "meta": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "additionalProperties": {}
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "deletedAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "kind",
+                          "type",
+                          "source",
+                          "sourceRef",
+                          "title",
+                          "summary",
+                          "icon",
+                          "color",
+                          "childCount",
+                          "descendantCount",
+                          "meta",
+                          "createdAt",
+                          "updatedAt",
+                          "deletedAt"
+                        ]
+                      }
+                    },
+                    "nextCursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "nextCursor"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "default": "about:blank"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized",
+                        "forbidden",
+                        "csrf_failed",
+                        "not_found",
+                        "conflict",
+                        "validation_failed",
+                        "rate_limited",
+                        "not_initialized",
+                        "already_initialized",
+                        "model_profile_missing",
+                        "model_key_missing",
+                        "provider_error",
+                        "run_not_active",
+                        "approval_not_pending",
+                        "internal"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ]
+                      }
+                    },
+                    "providerCode": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "not_found",
+                        "rate_limited",
+                        "timeout",
+                        "bad_request",
+                        "upstream_error",
+                        "network_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status",
+                    "code",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF token missing or invalid",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "default": "about:blank"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized",
+                        "forbidden",
+                        "csrf_failed",
+                        "not_found",
+                        "conflict",
+                        "validation_failed",
+                        "rate_limited",
+                        "not_initialized",
+                        "already_initialized",
+                        "model_profile_missing",
+                        "model_key_missing",
+                        "provider_error",
+                        "run_not_active",
+                        "approval_not_pending",
+                        "internal"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ]
+                      }
+                    },
+                    "providerCode": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "not_found",
+                        "rate_limited",
+                        "timeout",
+                        "bad_request",
+                        "upstream_error",
+                        "network_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status",
+                    "code",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/items/search": {
+      "get": {
+        "tags": [
+          "items"
+        ],
+        "summary": "Search items by title and summary, optionally under one item",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "required": true,
+            "name": "q",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "required": false,
+            "name": "type",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+            },
+            "required": false,
+            "name": "under",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 30
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matches",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "category",
+                              "content"
+                            ]
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "source": {
+                            "type": "string"
+                          },
+                          "sourceRef": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "summary": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "icon": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "color": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "childCount": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "descendantCount": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "meta": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "additionalProperties": {}
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "deletedAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "kind",
+                          "type",
+                          "source",
+                          "sourceRef",
+                          "title",
+                          "summary",
+                          "icon",
+                          "color",
+                          "childCount",
+                          "descendantCount",
+                          "meta",
+                          "createdAt",
+                          "updatedAt",
+                          "deletedAt"
+                        ]
+                      }
+                    },
+                    "nextCursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "nextCursor"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "default": "about:blank"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized",
+                        "forbidden",
+                        "csrf_failed",
+                        "not_found",
+                        "conflict",
+                        "validation_failed",
+                        "rate_limited",
+                        "not_initialized",
+                        "already_initialized",
+                        "model_profile_missing",
+                        "model_key_missing",
+                        "provider_error",
+                        "run_not_active",
+                        "approval_not_pending",
+                        "internal"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ]
+                      }
+                    },
+                    "providerCode": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "not_found",
+                        "rate_limited",
+                        "timeout",
+                        "bad_request",
+                        "upstream_error",
+                        "network_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status",
+                    "code",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "default": "about:blank"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized",
+                        "forbidden",
+                        "csrf_failed",
+                        "not_found",
+                        "conflict",
+                        "validation_failed",
+                        "rate_limited",
+                        "not_initialized",
+                        "already_initialized",
+                        "model_profile_missing",
+                        "model_key_missing",
+                        "provider_error",
+                        "run_not_active",
+                        "approval_not_pending",
+                        "internal"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ]
+                      }
+                    },
+                    "providerCode": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "not_found",
+                        "rate_limited",
+                        "timeout",
+                        "bad_request",
+                        "upstream_error",
+                        "network_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status",
+                    "code",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF token missing or invalid",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "default": "about:blank"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized",
+                        "forbidden",
+                        "csrf_failed",
+                        "not_found",
+                        "conflict",
+                        "validation_failed",
+                        "rate_limited",
+                        "not_initialized",
+                        "already_initialized",
+                        "model_profile_missing",
+                        "model_key_missing",
+                        "provider_error",
+                        "run_not_active",
+                        "approval_not_pending",
+                        "internal"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ]
+                      }
+                    },
+                    "providerCode": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "not_found",
+                        "rate_limited",
+                        "timeout",
+                        "bad_request",
+                        "upstream_error",
+                        "network_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status",
+                    "code",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/items/changes": {
+      "get": {
+        "tags": [
+          "items"
+        ],
+        "summary": "Items changed since a cursor, including deleted ones (deletedAt set)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 100
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Changes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "category",
+                              "content"
+                            ]
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "source": {
+                            "type": "string"
+                          },
+                          "sourceRef": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "summary": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "icon": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "color": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "childCount": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "descendantCount": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "meta": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "additionalProperties": {}
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "deletedAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "kind",
+                          "type",
+                          "source",
+                          "sourceRef",
+                          "title",
+                          "summary",
+                          "icon",
+                          "color",
+                          "childCount",
+                          "descendantCount",
+                          "meta",
+                          "createdAt",
+                          "updatedAt",
+                          "deletedAt"
+                        ]
+                      }
+                    },
+                    "nextCursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "nextCursor"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "default": "about:blank"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized",
+                        "forbidden",
+                        "csrf_failed",
+                        "not_found",
+                        "conflict",
+                        "validation_failed",
+                        "rate_limited",
+                        "not_initialized",
+                        "already_initialized",
+                        "model_profile_missing",
+                        "model_key_missing",
+                        "provider_error",
+                        "run_not_active",
+                        "approval_not_pending",
+                        "internal"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ]
+                      }
+                    },
+                    "providerCode": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "not_found",
+                        "rate_limited",
+                        "timeout",
+                        "bad_request",
+                        "upstream_error",
+                        "network_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status",
+                    "code",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "default": "about:blank"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized",
+                        "forbidden",
+                        "csrf_failed",
+                        "not_found",
+                        "conflict",
+                        "validation_failed",
+                        "rate_limited",
+                        "not_initialized",
+                        "already_initialized",
+                        "model_profile_missing",
+                        "model_key_missing",
+                        "provider_error",
+                        "run_not_active",
+                        "approval_not_pending",
+                        "internal"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ]
+                      }
+                    },
+                    "providerCode": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "not_found",
+                        "rate_limited",
+                        "timeout",
+                        "bad_request",
+                        "upstream_error",
+                        "network_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status",
+                    "code",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF token missing or invalid",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "default": "about:blank"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized",
+                        "forbidden",
+                        "csrf_failed",
+                        "not_found",
+                        "conflict",
+                        "validation_failed",
+                        "rate_limited",
+                        "not_initialized",
+                        "already_initialized",
+                        "model_profile_missing",
+                        "model_key_missing",
+                        "provider_error",
+                        "run_not_active",
+                        "approval_not_pending",
+                        "internal"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ]
+                      }
+                    },
+                    "providerCode": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "not_found",
+                        "rate_limited",
+                        "timeout",
+                        "bad_request",
+                        "upstream_error",
+                        "network_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status",
+                    "code",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/items/sync": {
+      "post": {
+        "tags": [
+          "items"
+        ],
+        "summary": "Sync all item providers now",
+        "responses": {
+          "204": {
+            "description": "Synced"
+          },
+          "401": {
+            "description": "Authentication is required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "default": "about:blank"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized",
+                        "forbidden",
+                        "csrf_failed",
+                        "not_found",
+                        "conflict",
+                        "validation_failed",
+                        "rate_limited",
+                        "not_initialized",
+                        "already_initialized",
+                        "model_profile_missing",
+                        "model_key_missing",
+                        "provider_error",
+                        "run_not_active",
+                        "approval_not_pending",
+                        "internal"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ]
+                      }
+                    },
+                    "providerCode": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "not_found",
+                        "rate_limited",
+                        "timeout",
+                        "bad_request",
+                        "upstream_error",
+                        "network_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status",
+                    "code",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF token missing or invalid",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "default": "about:blank"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized",
+                        "forbidden",
+                        "csrf_failed",
+                        "not_found",
+                        "conflict",
+                        "validation_failed",
+                        "rate_limited",
+                        "not_initialized",
+                        "already_initialized",
+                        "model_profile_missing",
+                        "model_key_missing",
+                        "provider_error",
+                        "run_not_active",
+                        "approval_not_pending",
+                        "internal"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ]
+                      }
+                    },
+                    "providerCode": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "not_found",
+                        "rate_limited",
+                        "timeout",
+                        "bad_request",
+                        "upstream_error",
+                        "network_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status",
+                    "code",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/items/{id}": {
+      "get": {
+        "tags": [
+          "items"
+        ],
+        "summary": "Get an item",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Item",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "category",
+                        "content"
+                      ]
+                    },
+                    "type": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "sourceRef": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "summary": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "icon": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "color": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "childCount": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "descendantCount": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "meta": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "additionalProperties": {}
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "deletedAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "kind",
+                    "type",
+                    "source",
+                    "sourceRef",
+                    "title",
+                    "summary",
+                    "icon",
+                    "color",
+                    "childCount",
+                    "descendantCount",
+                    "meta",
+                    "createdAt",
+                    "updatedAt",
+                    "deletedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "default": "about:blank"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized",
+                        "forbidden",
+                        "csrf_failed",
+                        "not_found",
+                        "conflict",
+                        "validation_failed",
+                        "rate_limited",
+                        "not_initialized",
+                        "already_initialized",
+                        "model_profile_missing",
+                        "model_key_missing",
+                        "provider_error",
+                        "run_not_active",
+                        "approval_not_pending",
+                        "internal"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ]
+                      }
+                    },
+                    "providerCode": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "not_found",
+                        "rate_limited",
+                        "timeout",
+                        "bad_request",
+                        "upstream_error",
+                        "network_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status",
+                    "code",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF token missing or invalid",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "default": "about:blank"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized",
+                        "forbidden",
+                        "csrf_failed",
+                        "not_found",
+                        "conflict",
+                        "validation_failed",
+                        "rate_limited",
+                        "not_initialized",
+                        "already_initialized",
+                        "model_profile_missing",
+                        "model_key_missing",
+                        "provider_error",
+                        "run_not_active",
+                        "approval_not_pending",
+                        "internal"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ]
+                      }
+                    },
+                    "providerCode": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "not_found",
+                        "rate_limited",
+                        "timeout",
+                        "bad_request",
+                        "upstream_error",
+                        "network_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status",
+                    "code",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "default": "about:blank"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized",
+                        "forbidden",
+                        "csrf_failed",
+                        "not_found",
+                        "conflict",
+                        "validation_failed",
+                        "rate_limited",
+                        "not_initialized",
+                        "already_initialized",
+                        "model_profile_missing",
+                        "model_key_missing",
+                        "provider_error",
+                        "run_not_active",
+                        "approval_not_pending",
+                        "internal"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ]
+                      }
+                    },
+                    "providerCode": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "not_found",
+                        "rate_limited",
+                        "timeout",
+                        "bad_request",
+                        "upstream_error",
+                        "network_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status",
+                    "code",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/items/{id}/children": {
+      "get": {
+        "tags": [
+          "items"
+        ],
+        "summary": "Direct children, cursor-paginated",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "required": false,
+            "name": "type",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "category",
+                "content"
+              ]
+            },
+            "required": false,
+            "name": "kind",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "position",
+                "title",
+                "updatedAt"
+              ],
+              "default": "position"
+            },
+            "required": false,
+            "name": "sort",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Children",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "category",
+                              "content"
+                            ]
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "source": {
+                            "type": "string"
+                          },
+                          "sourceRef": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "summary": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "icon": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "color": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "childCount": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "descendantCount": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "meta": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "additionalProperties": {}
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "deletedAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "kind",
+                          "type",
+                          "source",
+                          "sourceRef",
+                          "title",
+                          "summary",
+                          "icon",
+                          "color",
+                          "childCount",
+                          "descendantCount",
+                          "meta",
+                          "createdAt",
+                          "updatedAt",
+                          "deletedAt"
+                        ]
+                      }
+                    },
+                    "nextCursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "nextCursor"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "default": "about:blank"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized",
+                        "forbidden",
+                        "csrf_failed",
+                        "not_found",
+                        "conflict",
+                        "validation_failed",
+                        "rate_limited",
+                        "not_initialized",
+                        "already_initialized",
+                        "model_profile_missing",
+                        "model_key_missing",
+                        "provider_error",
+                        "run_not_active",
+                        "approval_not_pending",
+                        "internal"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ]
+                      }
+                    },
+                    "providerCode": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "not_found",
+                        "rate_limited",
+                        "timeout",
+                        "bad_request",
+                        "upstream_error",
+                        "network_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status",
+                    "code",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "default": "about:blank"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized",
+                        "forbidden",
+                        "csrf_failed",
+                        "not_found",
+                        "conflict",
+                        "validation_failed",
+                        "rate_limited",
+                        "not_initialized",
+                        "already_initialized",
+                        "model_profile_missing",
+                        "model_key_missing",
+                        "provider_error",
+                        "run_not_active",
+                        "approval_not_pending",
+                        "internal"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ]
+                      }
+                    },
+                    "providerCode": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "not_found",
+                        "rate_limited",
+                        "timeout",
+                        "bad_request",
+                        "upstream_error",
+                        "network_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status",
+                    "code",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF token missing or invalid",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "default": "about:blank"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized",
+                        "forbidden",
+                        "csrf_failed",
+                        "not_found",
+                        "conflict",
+                        "validation_failed",
+                        "rate_limited",
+                        "not_initialized",
+                        "already_initialized",
+                        "model_profile_missing",
+                        "model_key_missing",
+                        "provider_error",
+                        "run_not_active",
+                        "approval_not_pending",
+                        "internal"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ]
+                      }
+                    },
+                    "providerCode": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "not_found",
+                        "rate_limited",
+                        "timeout",
+                        "bad_request",
+                        "upstream_error",
+                        "network_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status",
+                    "code",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "default": "about:blank"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized",
+                        "forbidden",
+                        "csrf_failed",
+                        "not_found",
+                        "conflict",
+                        "validation_failed",
+                        "rate_limited",
+                        "not_initialized",
+                        "already_initialized",
+                        "model_profile_missing",
+                        "model_key_missing",
+                        "provider_error",
+                        "run_not_active",
+                        "approval_not_pending",
+                        "internal"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ]
+                      }
+                    },
+                    "providerCode": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "not_found",
+                        "rate_limited",
+                        "timeout",
+                        "bad_request",
+                        "upstream_error",
+                        "network_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status",
+                    "code",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/items/{id}/ancestors": {
+      "get": {
+        "tags": [
+          "items"
+        ],
+        "summary": "Ancestors from the root category down to the parent (breadcrumb)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ancestors",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "category",
+                              "content"
+                            ]
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "source": {
+                            "type": "string"
+                          },
+                          "sourceRef": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "summary": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "icon": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "color": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "childCount": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "descendantCount": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "meta": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "additionalProperties": {}
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "deletedAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "kind",
+                          "type",
+                          "source",
+                          "sourceRef",
+                          "title",
+                          "summary",
+                          "icon",
+                          "color",
+                          "childCount",
+                          "descendantCount",
+                          "meta",
+                          "createdAt",
+                          "updatedAt",
+                          "deletedAt"
+                        ]
+                      }
+                    },
+                    "nextCursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "nextCursor"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "default": "about:blank"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized",
+                        "forbidden",
+                        "csrf_failed",
+                        "not_found",
+                        "conflict",
+                        "validation_failed",
+                        "rate_limited",
+                        "not_initialized",
+                        "already_initialized",
+                        "model_profile_missing",
+                        "model_key_missing",
+                        "provider_error",
+                        "run_not_active",
+                        "approval_not_pending",
+                        "internal"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ]
+                      }
+                    },
+                    "providerCode": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "not_found",
+                        "rate_limited",
+                        "timeout",
+                        "bad_request",
+                        "upstream_error",
+                        "network_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status",
+                    "code",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF token missing or invalid",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "default": "about:blank"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized",
+                        "forbidden",
+                        "csrf_failed",
+                        "not_found",
+                        "conflict",
+                        "validation_failed",
+                        "rate_limited",
+                        "not_initialized",
+                        "already_initialized",
+                        "model_profile_missing",
+                        "model_key_missing",
+                        "provider_error",
+                        "run_not_active",
+                        "approval_not_pending",
+                        "internal"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ]
+                      }
+                    },
+                    "providerCode": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "not_found",
+                        "rate_limited",
+                        "timeout",
+                        "bad_request",
+                        "upstream_error",
+                        "network_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status",
+                    "code",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "default": "about:blank"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized",
+                        "forbidden",
+                        "csrf_failed",
+                        "not_found",
+                        "conflict",
+                        "validation_failed",
+                        "rate_limited",
+                        "not_initialized",
+                        "already_initialized",
+                        "model_profile_missing",
+                        "model_key_missing",
+                        "provider_error",
+                        "run_not_active",
+                        "approval_not_pending",
+                        "internal"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ]
+                      }
+                    },
+                    "providerCode": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "not_found",
+                        "rate_limited",
+                        "timeout",
+                        "bad_request",
+                        "upstream_error",
+                        "network_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status",
+                    "code",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/items/{id}/counts": {
+      "get": {
+        "tags": [
+          "items"
+        ],
+        "summary": "Children, descendants and descendants by type",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Counts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "children": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "descendants": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "byType": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    }
+                  },
+                  "required": [
+                    "children",
+                    "descendants",
+                    "byType"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "default": "about:blank"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized",
+                        "forbidden",
+                        "csrf_failed",
+                        "not_found",
+                        "conflict",
+                        "validation_failed",
+                        "rate_limited",
+                        "not_initialized",
+                        "already_initialized",
+                        "model_profile_missing",
+                        "model_key_missing",
+                        "provider_error",
+                        "run_not_active",
+                        "approval_not_pending",
+                        "internal"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ]
+                      }
+                    },
+                    "providerCode": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "not_found",
+                        "rate_limited",
+                        "timeout",
+                        "bad_request",
+                        "upstream_error",
+                        "network_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status",
+                    "code",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF token missing or invalid",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "default": "about:blank"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized",
+                        "forbidden",
+                        "csrf_failed",
+                        "not_found",
+                        "conflict",
+                        "validation_failed",
+                        "rate_limited",
+                        "not_initialized",
+                        "already_initialized",
+                        "model_profile_missing",
+                        "model_key_missing",
+                        "provider_error",
+                        "run_not_active",
+                        "approval_not_pending",
+                        "internal"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ]
+                      }
+                    },
+                    "providerCode": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "not_found",
+                        "rate_limited",
+                        "timeout",
+                        "bad_request",
+                        "upstream_error",
+                        "network_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status",
+                    "code",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "default": "about:blank"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized",
+                        "forbidden",
+                        "csrf_failed",
+                        "not_found",
+                        "conflict",
+                        "validation_failed",
+                        "rate_limited",
+                        "not_initialized",
+                        "already_initialized",
+                        "model_profile_missing",
+                        "model_key_missing",
+                        "provider_error",
+                        "run_not_active",
+                        "approval_not_pending",
+                        "internal"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ]
+                      }
+                    },
+                    "providerCode": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "not_found",
+                        "rate_limited",
+                        "timeout",
+                        "bad_request",
+                        "upstream_error",
+                        "network_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status",
+                    "code",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/items/{id}/subtree": {
+      "get": {
+        "tags": [
+          "items"
+        ],
+        "summary": "A subtree of limited depth (at most 3), as a flat list",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3,
+              "default": 2
+            },
+            "required": false,
+            "name": "depth",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            },
+            "required": false,
+            "name": "limitPerNode",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Subtree",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "nodes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "item": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "category",
+                                  "content"
+                                ]
+                              },
+                              "type": {
+                                "type": "string"
+                              },
+                              "source": {
+                                "type": "string"
+                              },
+                              "sourceRef": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "summary": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "icon": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "color": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "childCount": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "descendantCount": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "meta": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "additionalProperties": {}
+                              },
+                              "createdAt": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "updatedAt": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "deletedAt": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "format": "date-time"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "kind",
+                              "type",
+                              "source",
+                              "sourceRef",
+                              "title",
+                              "summary",
+                              "icon",
+                              "color",
+                              "childCount",
+                              "descendantCount",
+                              "meta",
+                              "createdAt",
+                              "updatedAt",
+                              "deletedAt"
+                            ]
+                          },
+                          "parentId": {
+                            "type": "string",
+                            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+                          },
+                          "depth": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 3
+                          }
+                        },
+                        "required": [
+                          "item",
+                          "parentId",
+                          "depth"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "nodes"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "default": "about:blank"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized",
+                        "forbidden",
+                        "csrf_failed",
+                        "not_found",
+                        "conflict",
+                        "validation_failed",
+                        "rate_limited",
+                        "not_initialized",
+                        "already_initialized",
+                        "model_profile_missing",
+                        "model_key_missing",
+                        "provider_error",
+                        "run_not_active",
+                        "approval_not_pending",
+                        "internal"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ]
+                      }
+                    },
+                    "providerCode": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "not_found",
+                        "rate_limited",
+                        "timeout",
+                        "bad_request",
+                        "upstream_error",
+                        "network_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status",
+                    "code",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "default": "about:blank"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized",
+                        "forbidden",
+                        "csrf_failed",
+                        "not_found",
+                        "conflict",
+                        "validation_failed",
+                        "rate_limited",
+                        "not_initialized",
+                        "already_initialized",
+                        "model_profile_missing",
+                        "model_key_missing",
+                        "provider_error",
+                        "run_not_active",
+                        "approval_not_pending",
+                        "internal"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ]
+                      }
+                    },
+                    "providerCode": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "not_found",
+                        "rate_limited",
+                        "timeout",
+                        "bad_request",
+                        "upstream_error",
+                        "network_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status",
+                    "code",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF token missing or invalid",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "default": "about:blank"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized",
+                        "forbidden",
+                        "csrf_failed",
+                        "not_found",
+                        "conflict",
+                        "validation_failed",
+                        "rate_limited",
+                        "not_initialized",
+                        "already_initialized",
+                        "model_profile_missing",
+                        "model_key_missing",
+                        "provider_error",
+                        "run_not_active",
+                        "approval_not_pending",
+                        "internal"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ]
+                      }
+                    },
+                    "providerCode": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "not_found",
+                        "rate_limited",
+                        "timeout",
+                        "bad_request",
+                        "upstream_error",
+                        "network_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status",
+                    "code",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "default": "about:blank"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized",
+                        "forbidden",
+                        "csrf_failed",
+                        "not_found",
+                        "conflict",
+                        "validation_failed",
+                        "rate_limited",
+                        "not_initialized",
+                        "already_initialized",
+                        "model_profile_missing",
+                        "model_key_missing",
+                        "provider_error",
+                        "run_not_active",
+                        "approval_not_pending",
+                        "internal"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ]
+                      }
+                    },
+                    "providerCode": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "not_found",
+                        "rate_limited",
+                        "timeout",
+                        "bad_request",
+                        "upstream_error",
+                        "network_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status",
+                    "code",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/items/{id}/content": {
+      "get": {
+        "tags": [
+          "items"
+        ],
+        "summary": "Open an item; file-backed items are re-checked against the authorized folders (403 if outside)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "format": {
+                      "type": "string",
+                      "enum": [
+                        "text"
+                      ]
+                    },
+                    "content": {
+                      "type": "string"
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "format",
+                    "content",
+                    "truncated"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "default": "about:blank"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized",
+                        "forbidden",
+                        "csrf_failed",
+                        "not_found",
+                        "conflict",
+                        "validation_failed",
+                        "rate_limited",
+                        "not_initialized",
+                        "already_initialized",
+                        "model_profile_missing",
+                        "model_key_missing",
+                        "provider_error",
+                        "run_not_active",
+                        "approval_not_pending",
+                        "internal"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ]
+                      }
+                    },
+                    "providerCode": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "not_found",
+                        "rate_limited",
+                        "timeout",
+                        "bad_request",
+                        "upstream_error",
+                        "network_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status",
+                    "code",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF token missing or invalid",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "default": "about:blank"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized",
+                        "forbidden",
+                        "csrf_failed",
+                        "not_found",
+                        "conflict",
+                        "validation_failed",
+                        "rate_limited",
+                        "not_initialized",
+                        "already_initialized",
+                        "model_profile_missing",
+                        "model_key_missing",
+                        "provider_error",
+                        "run_not_active",
+                        "approval_not_pending",
+                        "internal"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ]
+                      }
+                    },
+                    "providerCode": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "not_found",
+                        "rate_limited",
+                        "timeout",
+                        "bad_request",
+                        "upstream_error",
+                        "network_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status",
+                    "code",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "default": "about:blank"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized",
+                        "forbidden",
+                        "csrf_failed",
+                        "not_found",
+                        "conflict",
+                        "validation_failed",
+                        "rate_limited",
+                        "not_initialized",
+                        "already_initialized",
+                        "model_profile_missing",
+                        "model_key_missing",
+                        "provider_error",
+                        "run_not_active",
+                        "approval_not_pending",
+                        "internal"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ]
+                      }
+                    },
+                    "providerCode": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "not_found",
+                        "rate_limited",
+                        "timeout",
+                        "bad_request",
+                        "upstream_error",
+                        "network_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status",
+                    "code",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The item cannot be read (for example a binary file)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "default": "about:blank"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized",
+                        "forbidden",
+                        "csrf_failed",
+                        "not_found",
+                        "conflict",
+                        "validation_failed",
+                        "rate_limited",
+                        "not_initialized",
+                        "already_initialized",
+                        "model_profile_missing",
+                        "model_key_missing",
+                        "provider_error",
+                        "run_not_active",
+                        "approval_not_pending",
+                        "internal"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ]
+                      }
+                    },
+                    "providerCode": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "not_found",
+                        "rate_limited",
+                        "timeout",
+                        "bad_request",
+                        "upstream_error",
+                        "network_error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status",
+                    "code",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "webhooks": {}

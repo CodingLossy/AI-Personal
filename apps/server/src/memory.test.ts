@@ -225,6 +225,11 @@ describe('评测:真实 OpenAI 兼容 provider 回放 memory.save 往返', () =>
             'fs__search',
             'fs__write',
             'fs__move',
+            'items__roots',
+            'items__children',
+            'items__get',
+            'items__search',
+            'items__open',
         ]);
         const second = replay.calls[1]!.body as { messages: { role: string; content?: string }[] };
         const toolMessage = second.messages.find((m) => m.role === 'tool');

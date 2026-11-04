@@ -24,13 +24,17 @@ import { memoryRoutes } from './routes/memory.js';
 import { modelRoutes } from './routes/models.js';
 import { runRoutes } from './routes/runs.js';
 import { settingsRoutes } from './routes/settings.js';
+import type { ItemService } from '@ai-personal/items';
 import { fsRoutes } from './routes/fs.js';
+import { itemRoutes } from './routes/items.js';
 import { toolRoutes } from './routes/tools.js';
 import { sessionRoutes } from './routes/sessions.js';
 import { tokenRoutes } from './routes/tokens.js';
 import { SERVER_VERSION } from './version.js';
 
 export interface AppDeps {
+    /** 条目索引的同步与打开(ADR 0012)。 */
+    items: ItemService;
     /** 审计中的脱敏(通常是 providers 的 Redactor)。 */
     redact?: (text: string) => string;
     config: Pick<ServerConfig, 'sourceUrl' | 'webDir' | 'cookieSecure' | 'setupCode'>;
@@ -146,7 +150,8 @@ export function createApp(deps: AppDeps): OpenAPIHono<AppEnv> {
         .route('/', runRoutes(runDeps))
         .route('/', memoryRoutes({ repos, memory: deps.memory, detectCredential }))
         .route('/', toolRoutes({ repos, runs: deps.runs, redact: deps.redact ?? ((text) => text) }))
-        .route('/', fsRoutes({ repos, redact: deps.redact ?? ((text) => text) }));
+        .route('/', fsRoutes({ repos, items: deps.items, redact: deps.redact ?? ((text) => text) }))
+        .route('/', itemRoutes({ repos, items: deps.items }));
     app.route('/api/v1', v1);
 
     // OpenAPI 文档同样需要鉴权(业主决定;CI 另导出静态文件)

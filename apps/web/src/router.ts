@@ -5,7 +5,12 @@
 import { useEffect, useState } from 'react';
 
 export type Route =
-    { name: 'home' } | { name: 'session'; id: string } | { name: 'settings' } | { name: 'memory' } | { name: 'audit' };
+    | { name: 'home' }
+    | { name: 'session'; id: string }
+    | { name: 'settings' }
+    | { name: 'memory' }
+    | { name: 'audit' }
+    | { name: 'items' };
 
 export function parseRoute(path: string): Route {
     const session = /^\/s\/([0-9A-Za-z]+)\/?$/.exec(path);
@@ -13,6 +18,7 @@ export function parseRoute(path: string): Route {
     if (path === '/settings') return { name: 'settings' };
     if (path === '/memory') return { name: 'memory' };
     if (path === '/audit') return { name: 'audit' };
+    if (path === '/items') return { name: 'items' };
     return { name: 'home' };
 }
 

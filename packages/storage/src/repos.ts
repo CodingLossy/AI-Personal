@@ -20,6 +20,7 @@ import { createProfileRepository } from './profiles.js';
 import { createSettingsRepository } from './settings.js';
 import { createToolRepositories } from './tools.js';
 import { createFsRootRepository } from './fs-roots.js';
+import { createItemRepository } from './items.js';
 import { decodeCursor, encodeCursor, type Page } from './cursor.js';
 import type { Connection } from './db.js';
 import { newId } from './ids.js';
@@ -498,6 +499,7 @@ export function createRepositories(conn: Connection, options: RepoOptions = {}) 
         settings: createSettingsRepository(conn, now),
         ...createToolRepositories(conn, now),
         fsRoots: createFsRootRepository(conn, now),
+        items: createItemRepository(conn, now),
         ...createAuthRepositories(conn, now),
     };
 }

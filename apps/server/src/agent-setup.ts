@@ -2,6 +2,7 @@
 // Copyright (C) 2026 尹绪柏 (Theodore Yin)
 
 // 组装交给 RunManager 的工具与摘要函数(组合根;agent 包本身不依赖 memory)。
+import { createItemTools, type ItemService } from '@ai-personal/items';
 import type { MemoryService } from '@ai-personal/memory';
 import { type ModelProvider, selectProfile } from '@ai-personal/providers';
 import { MemorySaveInput, MemorySearchInput } from '@ai-personal/shared';
@@ -131,10 +132,11 @@ export function createSummarizer(repos: Repositories, providerFor: (profile: Mod
     };
 }
 
-/** 组合根:记忆工具、内置工具 time / calc / web.fetch 与文件工具 fs.*(ADR 0010、0011)。 */
+/** 组合根:记忆工具、内置工具 time / calc / web.fetch、文件工具 fs.* 与条目工具 items.*(ADR 0010–0012)。 */
 export function createToolRegistry(
     memory: MemoryService,
     repos: Repositories,
+    items: ItemService,
     builtin: BuiltinToolOptions = {},
 ): ToolRegistry {
     // 每次调用都重新读取授权目录,撤销立即生效
@@ -143,5 +145,6 @@ export function createToolRegistry(
         ...createMemoryTools(memory),
         ...createBuiltinTools(builtin),
         ...createFsTools({ roots }),
+        ...createItemTools(repos, items),
     );
 }

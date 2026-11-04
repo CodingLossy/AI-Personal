@@ -13,6 +13,11 @@ import type {
     CreateTokenRequest,
     FsRoot,
     FsRootInput,
+    Item,
+    ItemContent,
+    ItemCounts,
+    ItemSort,
+    ItemSubtree,
     LoginRequest,
     LoginResponse,
     Me,
@@ -232,6 +237,23 @@ export function createClient(options: ClientOptions) {
                     method: 'POST',
                     body: { decision, ...(remember ? { remember } : {}) },
                 }),
+        },
+
+        items: {
+            /** 知识地图(ADR 0012):顶层类别;服务器在数据过期时先同步。 */
+            roots: () => t.json<Page<Item>>('/items/roots'),
+            get: (id: string) => t.json<Item>(`/items/${enc(id)}`),
+            children: (id: string, params: PageParams & { type?: string; kind?: Item['kind']; sort?: ItemSort } = {}) =>
+                t.json<Page<Item>>(`/items/${enc(id)}/children`, { query: { ...params } }),
+            ancestors: (id: string) => t.json<Page<Item>>(`/items/${enc(id)}/ancestors`),
+            counts: (id: string) => t.json<ItemCounts>(`/items/${enc(id)}/counts`),
+            subtree: (id: string, params: { depth?: number; limitPerNode?: number } = {}) =>
+                t.json<ItemSubtree>(`/items/${enc(id)}/subtree`, { query: { ...params } }),
+            content: (id: string) => t.json<ItemContent>(`/items/${enc(id)}/content`),
+            search: (params: { q: string; type?: string; under?: string; limit?: number }) =>
+                t.json<Page<Item>>('/items/search', { query: { ...params } }),
+            changes: (params: PageParams = {}) => t.json<Page<Item>>('/items/changes', { query: { ...params } }),
+            sync: () => t.json<void>('/items/sync', { method: 'POST' }),
         },
 
         fsRoots: {

@@ -63,6 +63,9 @@ importers:
       '@ai-personal/agent':
         specifier: workspace:*
         version: link:../../packages/agent
+      '@ai-personal/items':
+        specifier: workspace:*
+        version: link:../../packages/items
       '@ai-personal/memory':
         specifier: workspace:*
         version: link:../../packages/memory
@@ -178,7 +181,20 @@ importers:
 
   packages/i18n: {}
 
-  packages/items: {}
+  packages/items:
+    dependencies:
+      '@ai-personal/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@ai-personal/storage':
+        specifier: workspace:*
+        version: link:../storage
+      '@ai-personal/tools':
+        specifier: workspace:*
+        version: link:../tools
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
 
   packages/memory:
     dependencies:

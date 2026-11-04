@@ -454,6 +454,42 @@ td .badge {
     border-bottom: 1px solid var(--border);
 }
 
+.items-layout {
+    display: grid;
+    grid-template-columns: minmax(14rem, 1fr) 2fr;
+    gap: 1rem;
+    align-items: start;
+}
+
+.tree {
+    list-style: none;
+    padding-left: 1rem;
+    margin: 0;
+}
+
+.items-layout > nav > .tree {
+    padding-left: 0;
+}
+
+.tree-row {
+    padding: 0.15rem 0.3rem;
+    border-radius: 4px;
+}
+
+.tree-row.active {
+    background: var(--panel);
+}
+
+.tree-toggle {
+    color: var(--fg);
+}
+
+.item-text {
+    white-space: pre-wrap;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
 @media (max-width: 720px) {
     .shell {
         flex-direction: column;
