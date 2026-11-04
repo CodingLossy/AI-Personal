@@ -33,6 +33,7 @@ All notable user-visible changes are listed here. The format follows [Keep a Cha
   - Out-of-folder attempts are audited.
 - **Knowledge map, data layer** (ADR 0012): files in your authorized folders, detected novels (book → chapter, UTF-8 or GB18030) and sessions are indexed as items with consistent counts. `/api/v1/items/*` lists roots, children, ancestors, counts, subtrees, search and changes, and opens items after re-checking file permissions. Read-only `items.*` tools let the model browse it. The Web UI has a minimal tree browser. Revoking a folder soft-deletes its items.
 - **Document reading**: `fs.read` turns PDF, DOCX and XLSX files into text, with PDF pages and XLSX sheets labelled. Parsing runs in a short-lived worker thread with memory and time limits, so idle memory is unchanged. Encrypted documents and ZIP bombs are refused.
+- **MCP client, stdio only** (ADR 0013): add local MCP servers in Settings → MCP servers or with `/api/v1/mcp/servers`. Their tools appear as `mcp.<server>.<tool>` and, whatever the server claims, need your approval by default; you can set a per-tool level through the API. The command runs without a shell and only receives a minimal environment plus variable names you list (never `AIP_*`); no values are stored. Output, including error text, is marked as untrusted. Removing a server also removes its pre-authorizations. The client code loads only when a server is configured, so idle memory is unchanged. Streamable HTTP is deferred.
 
 #### Changed
 
@@ -99,6 +100,7 @@ All notable user-visible changes are listed here. The format follows [Keep a Cha
   - 越权的尝试会写审计。
 - **知识地图数据层**(ADR 0012):授权目录中的文件、识别出的小说(书 → 章,UTF-8 或 GB18030)与会话登记为条目,计数保持一致;`/api/v1/items/*` 提供顶层类别、子项、祖先、计数、子树、搜索与增量变更,打开时重新校验文件权限;只读的 `items.*` 工具让模型也能浏览;Web UI 有最简的树形浏览;撤销授权目录时对应条目软删除。
 - **文档读取**:`fs.read` 把 PDF、DOCX、XLSX 转为文本,并标注 PDF 页码与 XLSX 工作表名。解析在短时的 worker 线程中进行,有内存与时间上限,空闲内存不变。拒绝加密文档与 ZIP 炸弹。
+- **MCP 客户端(仅 stdio)**(ADR 0013):在「设置 → MCP 服务器」或 `/api/v1/mcp/servers` 添加本机 MCP 服务器。它的工具以 `mcp.<服务器>.<工具>` 出现,不论服务器如何声明,默认都需要你批准;可以通过 API 按工具设置级别。命令不经过 shell 运行,只拿到最少的环境变量加上你列出的变量名(永远不含 `AIP_*`),不保存任何值。输出(包括错误文本)标为不可信。删除服务器时一并删除它的预授权。只有配置了服务器才加载客户端代码,空闲内存不变。Streamable HTTP 推迟。
 - 服务器重启时尚未处理的审批请求会过期,不再悄悄丢失。
 
 ### M1 · 对话核心(2026-11-04)
