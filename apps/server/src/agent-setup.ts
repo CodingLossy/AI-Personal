@@ -92,7 +92,11 @@ export function createMemoryTools(memory: MemoryService): AgentTool[] {
 /** 用 cheap 配置档(没有则用 chat 配置档)压缩旧消息。 */
 export function createSummarizer(repos: Repositories, providerFor: (profile: ModelProfileRecord) => ModelProvider) {
     return async (ownerId: string, transcript: string, signal: AbortSignal): Promise<string> => {
-        const profile = selectProfile(repos.modelProfiles.list(ownerId), 'cheap');
+        const settings = repos.settings.get(ownerId);
+        const profile = selectProfile(repos.modelProfiles.list(ownerId), 'cheap', {
+            chat: settings.defaultChatProfileId,
+            cheap: settings.defaultCheapProfileId,
+        });
         if (!profile) throw new Error('no model profile available for summarization');
         let text = '';
         for await (const chunk of providerFor(profile).stream({

@@ -28,6 +28,8 @@ import type {
     SendMessageRequest,
     Session,
     SetupRequest,
+    Settings,
+    SettingsPatch,
     UpdateSessionRequest,
 } from '@ai-personal/shared';
 import { RunStream, type StreamOptions } from './run-stream.js';
@@ -128,6 +130,11 @@ export function createClient(options: ClientOptions) {
                 t.json<ModelProfile>(`/models/${enc(id)}`, { method: 'PATCH', body }),
             delete: (id: string) => t.json<void>(`/models/${enc(id)}`, { method: 'DELETE' }),
             test: (id: string) => t.json<ModelTestResult>(`/models/${enc(id)}/test`, { method: 'POST' }),
+        },
+
+        settings: {
+            get: () => t.json<Settings>('/settings'),
+            update: (body: SettingsPatch) => t.json<Settings>('/settings', { method: 'PUT', body }),
         },
 
         sessions: {

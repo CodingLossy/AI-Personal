@@ -47,7 +47,7 @@ export const runResponses = {
     ...authErrors,
 };
 
-/** 选择运行用的模型配置档:请求指定 > 会话设置 > 第一个 chat 配置档(ADR 0006)。 */
+/** 选择运行用的模型配置档:请求指定 > 会话设置 > 设置中的默认 chat 配置档 > 第一个 chat 配置档(ADR 0006)。 */
 export function resolveProfile(
     deps: SessionRouteDeps,
     ownerId: string,
@@ -56,7 +56,10 @@ export function resolveProfile(
 ): ModelProfileRecord {
     const profiles = deps.repos.modelProfiles.list(ownerId);
     const wanted = requested ?? sessionProfileId;
-    const profile = wanted ? (profiles.find((p) => p.id === wanted) ?? null) : selectProfile(profiles, 'chat');
+    const defaults = { chat: deps.repos.settings.get(ownerId).defaultChatProfileId };
+    const profile = wanted
+        ? (profiles.find((p) => p.id === wanted) ?? null)
+        : selectProfile(profiles, 'chat', defaults);
     if (!profile) {
         throw new ApiError(
             409,
