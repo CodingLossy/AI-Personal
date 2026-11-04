@@ -4,7 +4,10 @@
 // 授权目录的 REST(ADR 0011 第 1 节):只有用户能增删,没有对应的工具。
 import { createRoute, z } from '@hono/zod-openapi';
 import { FsRoot, FsRootInput, Id, pageOf } from '@ai-personal/shared';
+import type { ItemService } from '@ai-personal/items';
 import type { Repositories } from '@ai-personal/storage';
+import type { Context } from 'hono';
+import type { AppEnv } from '../env.js';
 import { inputDigest, isWithin, normalizeRoot, PathError } from '@ai-personal/tools';
 import { requireOwner } from '../auth/middleware.js';
 import { ApiError, notFound } from '../errors.js';
@@ -41,7 +44,7 @@ const deleteRoute = createRoute({
     responses: { 204: { description: 'Revoked' }, 404: problem('Not found'), ...authErrors },
 });
 
-export function fsRoutes(deps: { repos: Repositories; redact: (text: string) => string }) {
+export function fsRoutes(deps: { repos: Repositories; items: ItemService; redact: (text: string) => string }) {
     const { repos } = deps;
     return router()
         .openapi(listRoute, (c) => c.json({ items: repos.fsRoots.list(requireOwner(c)), nextCursor: null }, 200))
@@ -61,6 +64,7 @@ export function fsRoutes(deps: { repos: Repositories; redact: (text: string) => 
                 throw new ApiError(409, 'conflict', 'Conflict', 'This folder is already authorized.');
             }
             const root = repos.fsRoots.create(ownerId, { path: real, label: body.label?.trim() || real });
+            refreshItems(c, ownerId);
             c.get('logger').info({ rootId: root.id }, 'folder authorized');
             return c.json(root, 201);
         })
@@ -88,6 +92,13 @@ export function fsRoutes(deps: { repos: Repositories; redact: (text: string) => 
                     error: null,
                 });
             }
+            refreshItems(c, ownerId);
             return c.body(null, 204);
         });
+
+    /** 授权目录变化后在后台重新同步条目索引(撤销时对应子树软删除);下一次读取会等它完成。 */
+    function refreshItems(c: Context<AppEnv>, ownerId: string): void {
+        deps.items.invalidate(ownerId);
+        deps.items.sync(ownerId).catch((err: unknown) => c.get('logger').warn({ err }, 'item sync failed'));
+    }
 }

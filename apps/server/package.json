@@ -30,6 +30,7 @@
   },
   "dependencies": {
     "@ai-personal/agent": "workspace:*",
+    "@ai-personal/items": "workspace:*",
     "@ai-personal/memory": "workspace:*",
     "@ai-personal/providers": "workspace:*",
     "@ai-personal/shared": "workspace:*",

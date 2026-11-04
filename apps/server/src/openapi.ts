@@ -3,6 +3,7 @@
 
 // 生成 OpenAPI 文档的静态副本(业主决定:/api/v1/openapi.json 需要鉴权,CI 另导出静态文件)。
 import { EventBus, RunManager } from '@ai-personal/agent';
+import { createItemService } from '@ai-personal/items';
 import { createMemoryService } from '@ai-personal/memory';
 import { Redactor, SecretStore } from '@ai-personal/providers';
 import { createRepositories, migrate, migrations, openDatabase } from '@ai-personal/storage';
@@ -27,6 +28,7 @@ export async function buildOpenApiDocument(): Promise<unknown> {
             providerDeps: { secrets, redactor },
             bus,
             memory: createMemoryService(repos),
+            items: createItemService({ repos }),
             runs: new RunManager({
                 repos,
                 bus,

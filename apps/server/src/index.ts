@@ -5,6 +5,7 @@ import { mkdirSync } from 'node:fs';
 import type { Server } from 'node:http';
 import { serve } from '@hono/node-server';
 import { EventBus, RunManager } from '@ai-personal/agent';
+import { createItemService } from '@ai-personal/items';
 import { createMemoryService } from '@ai-personal/memory';
 import { createProvider, Redactor, SecretStore } from '@ai-personal/providers';
 import { createRepositories, openStorage } from '@ai-personal/storage';
@@ -43,12 +44,16 @@ if (repos.owners.count() === 0) {
 const providerDeps = { secrets, redactor };
 const providerFor = (profile: Parameters<typeof createProvider>[0]) => createProvider(profile, providerDeps);
 const memory = createMemoryService(repos);
+const items = createItemService({
+    repos,
+    onError: (err, { provider }) => logger.warn({ err, provider }, 'item provider sync failed'),
+});
 const bus = new EventBus();
 const runs = new RunManager({
     repos,
     bus,
     providerFor,
-    tools: createToolRegistry(memory, repos),
+    tools: createToolRegistry(memory, repos, items),
     redact: (text) => redactor.redact(text),
     summarize: createSummarizer(repos, providerFor),
     onError: (err, { runId }) => logger.error({ err, runId }, 'run failed unexpectedly'),
@@ -65,6 +70,7 @@ const app = createApp({
     bus,
     runs,
     memory,
+    items,
     redact: (text) => redactor.redact(text),
 });
 
