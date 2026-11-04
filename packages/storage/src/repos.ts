@@ -15,6 +15,7 @@ import type {
 } from '@ai-personal/shared';
 import { z } from 'zod';
 import { createAuthRepositories } from './auth.js';
+import { createMemoryRepository, createSummaryRepository } from './memory.js';
 import { createProfileRepository } from './profiles.js';
 import { decodeCursor, encodeCursor, type Page } from './cursor.js';
 import type { Connection } from './db.js';
@@ -489,6 +490,8 @@ export function createRepositories(conn: Connection, options: RepoOptions = {}) 
         runs,
         events,
         modelProfiles: createProfileRepository(conn, now),
+        memories: createMemoryRepository(conn, now),
+        summaries: createSummaryRepository(conn, now),
         ...createAuthRepositories(conn, now),
     };
 }

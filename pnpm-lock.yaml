@@ -133,7 +133,14 @@ importers:
 
   packages/items: {}
 
-  packages/memory: {}
+  packages/memory:
+    dependencies:
+      '@ai-personal/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@ai-personal/storage':
+        specifier: workspace:*
+        version: link:../storage
 
   packages/plugin-sdk: {}
 
