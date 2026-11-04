@@ -31,6 +31,7 @@ All notable user-visible changes are listed here. The format follows [Keep a Cha
   - Writes are atomic and never replace a file unless asked.
   - Write approvals can only be remembered per folder.
   - Out-of-folder attempts are audited.
+- **Document reading**: `fs.read` turns PDF, DOCX and XLSX files into text, with PDF pages and XLSX sheets labelled. Parsing runs in a short-lived worker thread with memory and time limits, so idle memory is unchanged. Encrypted documents and ZIP bombs are refused.
 
 #### Changed
 
@@ -95,6 +96,7 @@ All notable user-visible changes are listed here. The format follows [Keep a Cha
   - 写入是原子的,默认不覆盖。
   - 写入审批只能按文件夹记住。
   - 越权的尝试会写审计。
+- **文档读取**:`fs.read` 把 PDF、DOCX、XLSX 转为文本,并标注 PDF 页码与 XLSX 工作表名。解析在短时的 worker 线程中进行,有内存与时间上限,空闲内存不变。拒绝加密文档与 ZIP 炸弹。
 - 服务器重启时尚未处理的审批请求会过期,不再悄悄丢失。
 
 ### M1 · 对话核心(2026-11-04)
