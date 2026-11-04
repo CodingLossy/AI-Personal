@@ -31,6 +31,7 @@ All notable user-visible changes are listed here. The format follows [Keep a Cha
   - Writes are atomic and never replace a file unless asked.
   - Write approvals can only be remembered per folder.
   - Out-of-folder attempts are audited.
+- **Knowledge map, data layer** (ADR 0012): files in your authorized folders, detected novels (book → chapter, UTF-8 or GB18030) and sessions are indexed as items with consistent counts. `/api/v1/items/*` lists roots, children, ancestors, counts, subtrees, search and changes, and opens items after re-checking file permissions. Read-only `items.*` tools let the model browse it. The Web UI has a minimal tree browser. Revoking a folder soft-deletes its items.
 - **Document reading**: `fs.read` turns PDF, DOCX and XLSX files into text, with PDF pages and XLSX sheets labelled. Parsing runs in a short-lived worker thread with memory and time limits, so idle memory is unchanged. Encrypted documents and ZIP bombs are refused.
 
 #### Changed
@@ -96,6 +97,7 @@ All notable user-visible changes are listed here. The format follows [Keep a Cha
   - 写入是原子的,默认不覆盖。
   - 写入审批只能按文件夹记住。
   - 越权的尝试会写审计。
+- **知识地图数据层**(ADR 0012):授权目录中的文件、识别出的小说(书 → 章,UTF-8 或 GB18030)与会话登记为条目,计数保持一致;`/api/v1/items/*` 提供顶层类别、子项、祖先、计数、子树、搜索与增量变更,打开时重新校验文件权限;只读的 `items.*` 工具让模型也能浏览;Web UI 有最简的树形浏览;撤销授权目录时对应条目软删除。
 - **文档读取**:`fs.read` 把 PDF、DOCX、XLSX 转为文本,并标注 PDF 页码与 XLSX 工作表名。解析在短时的 worker 线程中进行,有内存与时间上限,空闲内存不变。拒绝加密文档与 ZIP 炸弹。
 - 服务器重启时尚未处理的审批请求会过期,不再悄悄丢失。
 
