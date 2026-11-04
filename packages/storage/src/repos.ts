@@ -18,6 +18,7 @@ import { createAuthRepositories } from './auth.js';
 import { createMemoryRepository, createSummaryRepository } from './memory.js';
 import { createProfileRepository } from './profiles.js';
 import { createSettingsRepository } from './settings.js';
+import { createToolRepositories } from './tools.js';
 import { decodeCursor, encodeCursor, type Page } from './cursor.js';
 import type { Connection } from './db.js';
 import { newId } from './ids.js';
@@ -494,6 +495,7 @@ export function createRepositories(conn: Connection, options: RepoOptions = {}) 
         memories: createMemoryRepository(conn, now),
         summaries: createSummaryRepository(conn, now),
         settings: createSettingsRepository(conn, now),
+        ...createToolRepositories(conn, now),
         ...createAuthRepositories(conn, now),
     };
 }
