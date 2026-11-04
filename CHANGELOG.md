@@ -24,6 +24,13 @@ All notable user-visible changes are listed here. The format follows [Keep a Cha
     - needs approval and can only be pre-authorized per domain;
     - blocks loopback, private, link-local and cloud metadata addresses, including after DNS lookups and redirects;
     - limits responses to 2 MB and 15 seconds.
+- **File tools** (ADR 0011):
+  - `fs.list`, `fs.read` and `fs.search` (read) and `fs.write` and `fs.move` (write, need approval) only work inside the folders you authorize in Settings → Authorized folders.
+  - Paths are resolved to their real location (links, junctions and Windows 8.3 short names) before checking.
+  - Alternate data streams, device names, UNC paths and names ending in a dot or space are rejected.
+  - Writes are atomic and never replace a file unless asked.
+  - Write approvals can only be remembered per folder.
+  - Out-of-folder attempts are audited.
 
 #### Changed
 
@@ -81,6 +88,13 @@ All notable user-visible changes are listed here. The format follows [Keep a Cha
     - 需要审批,只能按域名预授权;
     - 拒绝回环、私网、链路本地与云元数据地址(DNS 解析与跳转后同样校验);
     - 响应上限 2 MB、15 秒。
+- **文件工具**(ADR 0011):
+  - `fs.list`、`fs.read`、`fs.search`(只读)与 `fs.write`、`fs.move`(写入,需审批)只能在设置 → 授权目录中授权的文件夹内使用。
+  - 检查前先把路径解析为真实位置(链接、junction、Windows 8.3 短名)。
+  - 拒绝备用数据流、设备名、UNC 路径以及以点或空格结尾的名称。
+  - 写入是原子的,默认不覆盖。
+  - 写入审批只能按文件夹记住。
+  - 越权的尝试会写审计。
 - 服务器重启时尚未处理的审批请求会过期,不再悄悄丢失。
 
 ### M1 · 对话核心(2026-11-04)
