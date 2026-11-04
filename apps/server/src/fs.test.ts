@@ -168,3 +168,64 @@ describe('/api/v1/fs/roots 与文件工具', () => {
         expect((await req(`/api/v1/fs/roots/${root.id}`, { method: 'DELETE' })).status).toBe(404);
     });
 });
+
+/** 只有一页文字的最小 PDF;偏移与交叉引用表按规范计算。 */
+function minimalPdf(text: string): Buffer {
+    const stream = `BT /F1 14 Tf 20 100 Td (${text}) Tj ET`;
+    const objects = [
+        '',
+        '<< /Type /Catalog /Pages 2 0 R >>',
+        '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+        '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 400 144] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+        `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+        '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    ];
+    let out = '%PDF-1.4\n';
+    const offsets: number[] = [];
+    for (let id = 1; id < objects.length; id++) {
+        offsets[id] = out.length;
+        out += `${id} 0 obj\n${objects[id]}\nendobj\n`;
+    }
+    const xref = out.length;
+    out += `xref\n0 ${objects.length}\n0000000000 65535 f \n`;
+    for (let id = 1; id < objects.length; id++) out += `${String(offsets[id]).padStart(10, '0')} 00000 n \n`;
+    out += `trailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+    return Buffer.from(out, 'latin1');
+}
+
+describe('验收:总结 PDF 并另存为 md 只需一次审批', () => {
+    it('fs.read 解析 PDF(不需要审批),fs.write 写 md(一次审批)', async () => {
+        writeFileSync(path.join(base, 'Docs', 'paper.pdf'), minimalPdf('Revenue grew 12 percent in Q3'));
+        const { steps, requests, post, run } = await setup();
+        await post('/api/v1/fs/roots', { path: path.join(base, 'Docs') });
+        const summary = '# 摘要\n\n第三季度收入增长 12%。';
+        let pdfText = '';
+        steps.push(
+            callTool('fs.read', { path: path.join(base, 'Docs', 'paper.pdf') }),
+            async function* (request) {
+                pdfText = request.messages.at(-1)!.content;
+                yield {
+                    type: 'tool-call',
+                    callId: 'c2',
+                    name: 'fs.write',
+                    input: { path: path.join(base, 'Docs', 'paper-summary.md'), content: summary },
+                };
+                yield { type: 'finish', reason: 'tool-calls' };
+            },
+            answer('已保存摘要。'),
+        );
+        const approvals: string[] = [];
+        await run('总结 paper.pdf 并另存为 md', async (e) => {
+            if (e.event.type !== 'approval-required') return;
+            approvals.push(e.event.toolName ?? '');
+            await post(`/api/v1/approvals/${e.event.callId}`, { decision: 'approve' });
+        });
+        expect(approvals).toEqual(['fs.write']);
+        expect(JSON.parse(pdfText)).toMatchObject({
+            untrusted: true,
+            content: expect.stringContaining('Revenue grew 12 percent in Q3') as string,
+        });
+        expect(readFileSync(path.join(base, 'Docs', 'paper-summary.md'), 'utf8')).toBe(summary);
+        expect(requests).toHaveLength(3);
+    }, 30_000);
+});
