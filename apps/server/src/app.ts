@@ -23,6 +23,7 @@ import { json } from './routes/common.js';
 import { memoryRoutes } from './routes/memory.js';
 import { modelRoutes } from './routes/models.js';
 import { runRoutes } from './routes/runs.js';
+import { settingsRoutes } from './routes/settings.js';
 import { sessionRoutes } from './routes/sessions.js';
 import { tokenRoutes } from './routes/tokens.js';
 import { SERVER_VERSION } from './version.js';
@@ -136,6 +137,7 @@ export function createApp(deps: AppDeps): OpenAPIHono<AppEnv> {
         )
         .route('/', tokenRoutes({ repos, now }))
         .route('/', modelRoutes({ repos, secrets: deps.secrets, providerDeps: deps.providerDeps }))
+        .route('/', settingsRoutes({ repos }))
         .route('/', sessionRoutes(runDeps))
         .route('/', runRoutes(runDeps))
         .route('/', memoryRoutes({ repos, memory: deps.memory, runs: deps.runs, detectCredential }));

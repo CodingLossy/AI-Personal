@@ -30,6 +30,16 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      - name: Install Playwright Chromium
+        run: pnpm --filter @ai-personal/web exec playwright install --with-deps chromium
+      - name: Web UI smoke test (Playwright)
+        run: pnpm test:e2e
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: apps/web/test-results
       - name: OpenAPI document is up to date
         run: |
           pnpm --filter @ai-personal/server openapi:export
