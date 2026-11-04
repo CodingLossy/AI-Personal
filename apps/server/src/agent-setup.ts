@@ -2,7 +2,7 @@
 // Copyright (C) 2026 尹绪柏 (Theodore Yin)
 
 // 组装交给 RunManager 的工具与摘要函数(组合根;agent 包本身不依赖 memory)。
-import { createItemTools, type ItemService } from '@ai-personal/items';
+import { createItemTools, createKbTools, type ItemService, type KnowledgeBase } from '@ai-personal/items';
 import type { MemoryService } from '@ai-personal/memory';
 import { type ModelProvider, selectProfile } from '@ai-personal/providers';
 import { MemorySaveInput, MemorySearchInput } from '@ai-personal/shared';
@@ -132,11 +132,12 @@ export function createSummarizer(repos: Repositories, providerFor: (profile: Mod
     };
 }
 
-/** 组合根:记忆工具、内置工具 time / calc / web.fetch、文件工具 fs.* 与条目工具 items.*(ADR 0010–0012)。 */
+/** 组合根:记忆工具、内置工具 time / calc / web.fetch、文件工具 fs.*、条目工具 items.* 与 kb.search(ADR 0010–0015)。 */
 export function createToolRegistry(
     memory: MemoryService,
     repos: Repositories,
     items: ItemService,
+    kb: KnowledgeBase,
     builtin: BuiltinToolOptions = {},
 ): ToolRegistry {
     // 每次调用都重新读取授权目录,撤销立即生效
@@ -146,5 +147,7 @@ export function createToolRegistry(
         ...createBuiltinTools(builtin),
         ...createFsTools({ roots }),
         ...createItemTools(repos, items),
+        // 检索前按需同步条目(超过 60 秒才同步),新文件在后台进入知识库
+        ...createKbTools(kb, (ownerId) => items.syncIfStale(ownerId)),
     );
 }

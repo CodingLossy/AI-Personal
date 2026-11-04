@@ -502,3 +502,8 @@ td .badge {
         max-height: 40vh;
     }
 }
+
+.citations {
+    margin: 0.25rem 0;
+    padding-left: 1.5rem;
+}

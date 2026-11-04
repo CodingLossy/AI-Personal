@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 尹绪柏 (Theodore Yin)
 
+import type { KbSearchOutput } from '@ai-personal/shared';
 import { ApprovalActions } from './ApprovalActions.js';
 import { useI18n } from './i18n.js';
 import type { LiveTool } from './live-turn.js';
@@ -46,12 +47,34 @@ export function ToolCard({ tool, live = false }: { tool: LiveTool; live?: boolea
                 tool.result.error ? (
                     <p className="error small">{t('tool.error', { msg: tool.result.error })}</p>
                 ) : (
-                    <details>
-                        <summary className="small muted">{t('tool.result')}</summary>
-                        <pre>{show(tool.result.output)}</pre>
-                    </details>
+                    <>
+                        {tool.name === 'kb.search' ? <Citations output={tool.result.output} /> : null}
+                        <details>
+                            <summary className="small muted">{t('tool.result')}</summary>
+                            <pre>{show(tool.result.output)}</pre>
+                        </details>
+                    </>
                 )
             ) : null}
         </div>
+    );
+}
+
+/** kb.search 的引用:文件名与页码(可点击跳转推迟,ADR 0015)。其他工具的输出不显示。 */
+function Citations({ output }: { output: unknown }) {
+    const { t } = useI18n();
+    // 只用类型判断,不在浏览器里引入 zod
+    const citations = (output as Partial<KbSearchOutput> | null)?.citations;
+    if (!Array.isArray(citations) || citations.length === 0) return null;
+    return (
+        <ol className="citations small">
+            {citations.map((c) => (
+                <li key={c.n} title={c.path}>
+                    {c.file}
+                    {c.page ? ` · ${t('kb.page', { n: c.page })}` : ''}
+                    {c.heading ? ` · ${c.heading}` : ''}
+                </li>
+            ))}
+        </ol>
     );
 }

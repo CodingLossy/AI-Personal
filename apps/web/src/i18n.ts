@@ -114,6 +114,8 @@ const zh = {
     'fsRoots.add': '授权',
     'fsRoots.remove': '撤销',
     'fsRoots.removeConfirm': '撤销对 {path} 的授权?这个文件夹内的写入预授权也会一并删除。',
+    'settings.chunkChars': '知识库块大小(字符)',
+    'kb.page': '第 {n} 页',
     'embed.title': '向量索引',
     'embed.disabled': '没有 embed 用途的 OpenAI 兼容配置档,语义检索未启用(只用全文检索)。',
     'embed.summary': '模型 {model} · 维度 {dims} · 已嵌入 {embedded} 条 · 排队 {queued} 条 · 今天 {today} / {limit}',
@@ -294,6 +296,8 @@ const en: Record<Key, string> = {
     'fsRoots.add': 'Authorize',
     'fsRoots.remove': 'Revoke',
     'fsRoots.removeConfirm': 'Revoke access to {path}? Write pre-authorizations inside this folder are removed too.',
+    'settings.chunkChars': 'Knowledge base chunk size (characters)',
+    'kb.page': 'p. {n}',
     'embed.title': 'Vector index',
     'embed.disabled':
         'No OpenAI-compatible profile with the embed purpose, so semantic search is off (full-text search only).',

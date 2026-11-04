@@ -5301,6 +5301,19 @@
                       "required": [
                         "autoExtract"
                       ]
+                    },
+                    "knowledgeBase": {
+                      "type": "object",
+                      "properties": {
+                        "chunkChars": {
+                          "type": "integer",
+                          "minimum": 200,
+                          "maximum": 4000
+                        }
+                      },
+                      "required": [
+                        "chunkChars"
+                      ]
                     }
                   },
                   "required": [
@@ -5308,7 +5321,8 @@
                     "defaultCheapProfileId",
                     "locale",
                     "theme",
-                    "memory"
+                    "memory",
+                    "knowledgeBase"
                   ]
                 }
               }
@@ -5556,6 +5570,16 @@
                         "type": "boolean"
                       }
                     }
+                  },
+                  "knowledgeBase": {
+                    "type": "object",
+                    "properties": {
+                      "chunkChars": {
+                        "type": "integer",
+                        "minimum": 200,
+                        "maximum": 4000
+                      }
+                    }
                   }
                 }
               }
@@ -5609,6 +5633,19 @@
                       "required": [
                         "autoExtract"
                       ]
+                    },
+                    "knowledgeBase": {
+                      "type": "object",
+                      "properties": {
+                        "chunkChars": {
+                          "type": "integer",
+                          "minimum": 200,
+                          "maximum": 4000
+                        }
+                      },
+                      "required": [
+                        "chunkChars"
+                      ]
                     }
                   },
                   "required": [
@@ -5616,7 +5653,8 @@
                     "defaultCheapProfileId",
                     "locale",
                     "theme",
-                    "memory"
+                    "memory",
+                    "knowledgeBase"
                   ]
                 }
               }

@@ -11,7 +11,7 @@ import { createMemoryService } from '@ai-personal/memory';
 import { createProvider, type ModelProvider, Redactor, SecretStore } from '@ai-personal/providers';
 import { createRepositories, openStorage, type Repositories } from '@ai-personal/storage';
 import type { WebFetchOptions } from '@ai-personal/tools';
-import { createItemService } from '@ai-personal/items';
+import { createItemService, createKnowledgeBase, type KnowledgeBase } from '@ai-personal/items';
 import { createSummarizer, createToolRegistry } from './agent-setup.js';
 import { createApp, type AppDeps } from './app.js';
 import { createMcpControl } from './mcp-setup.js';
@@ -27,6 +27,7 @@ export interface TestServer {
     bus: EventBus;
     runs: RunManager;
     embeddings: EmbeddingService;
+    kb: KnowledgeBase;
     dir: string;
     repos: Repositories;
     /** 本测试期间写出的全部日志行。 */
@@ -75,21 +76,22 @@ export async function createTestServer(
     const providerFor = (profile: Parameters<typeof createProvider>[0]) =>
         options.provider ?? createProvider(profile, providerDeps);
     const memory = createMemoryService(repos);
-    const items = createItemService({ repos });
+    const embeddings = createEmbeddingService({ repos, providerFor, redact: (text) => redactor.redact(text) });
+    const kb = createKnowledgeBase({ repos, vectors: embeddings });
+    const items = createItemService({ repos, onSynced: (ownerId) => void kb.index(ownerId) });
     const bus = new EventBus();
     const runs = new RunManager({
         repos,
         bus,
         persistIntervalMs: 0,
         providerFor,
-        tools: createToolRegistry(memory, repos, items, options.webFetch ? { webFetch: options.webFetch } : {}),
+        tools: createToolRegistry(memory, repos, items, kb, options.webFetch ? { webFetch: options.webFetch } : {}),
         redact: (text) => redactor.redact(text),
         ...(options.approvalTimeoutMs ? { approvalTimeoutMs: options.approvalTimeoutMs } : {}),
         summarize: createSummarizer(repos, providerFor),
     });
     // MCP 子进程在 cleanup 时关闭
     const mcp = createMcpControl(runs.tools);
-    const embeddings = createEmbeddingService({ repos, providerFor, redact: (text) => redactor.redact(text) });
     const app = createApp({
         mcp,
         embeddings,
@@ -117,11 +119,13 @@ export async function createTestServer(
         bus,
         runs,
         embeddings,
+        kb,
         dir,
         repos,
         logs,
         async cleanup() {
             mcp.closeAll();
+            await kb.idle();
             embeddings.stop();
             await embeddings.idle();
             await runs.idle();
