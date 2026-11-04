@@ -4,6 +4,9 @@
 import type {
     AccessToken,
     ApprovalDecision,
+    ApprovalRequest,
+    ApprovalStatus,
+    AuditEntry,
     AuthStatus,
     CreatedAccessToken,
     CreateSessionRequest,
@@ -23,6 +26,8 @@ import type {
     ModelProfileInput,
     ModelProfilePatch,
     ModelTestResult,
+    PreauthRemember,
+    Preauthorization,
     Run,
     SendMessageAccepted,
     SendMessageRequest,
@@ -30,6 +35,8 @@ import type {
     SetupRequest,
     Settings,
     SettingsPatch,
+    ToolInfo,
+    ToolRisk,
     UpdateSessionRequest,
 } from '@ai-personal/shared';
 import { RunStream, type StreamOptions } from './run-stream.js';
@@ -208,12 +215,36 @@ export function createClient(options: ClientOptions) {
                 ),
         },
 
+        tools: {
+            /** 工具及其风险级别与默认审批方式(ADR 0010)。 */
+            list: () => t.json<Page<ToolInfo>>('/tools'),
+        },
+
         approvals: {
-            decide: (callId: string, decision: ApprovalDecision['decision']) =>
+            /** 审批请求(status=pending 用于跨会话的审批弹窗)。 */
+            list: (params: PageParams & { status?: ApprovalStatus | undefined } = {}) =>
+                t.json<Page<ApprovalRequest>>('/approvals', { query: { ...params } }),
+            /** 批准或拒绝;批准时可带 remember(本会话 / 永久,external 与 dangerous 工具不允许)。 */
+            decide: (callId: string, decision: ApprovalDecision['decision'], remember?: PreauthRemember) =>
                 t.json<{ callId: string; decision: ApprovalDecision['decision'] }>(`/approvals/${enc(callId)}`, {
                     method: 'POST',
-                    body: { decision },
+                    body: { decision, ...(remember ? { remember } : {}) },
                 }),
+        },
+
+        preauthorizations: {
+            list: () => t.json<Page<Preauthorization>>('/preauthorizations'),
+            revoke: (id: string) => t.json<void>(`/preauthorizations/${enc(id)}`, { method: 'DELETE' }),
+        },
+
+        audit: {
+            list: (
+                params: PageParams & {
+                    toolName?: string | undefined;
+                    risk?: ToolRisk | undefined;
+                    since?: string | undefined;
+                } = {},
+            ) => t.json<Page<AuditEntry>>('/audit', { query: { ...params } }),
         },
 
         memory: {
