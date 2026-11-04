@@ -19,6 +19,10 @@ import type {
     ItemSort,
     ItemSubtree,
     LoginRequest,
+    McpServerInput,
+    McpServerPatch,
+    McpServerStatus,
+    McpServerView,
     LoginResponse,
     Me,
     Memory,
@@ -261,6 +265,16 @@ export function createClient(options: ClientOptions) {
             list: () => t.json<Page<FsRoot>>('/fs/roots'),
             add: (body: FsRootInput) => t.json<FsRoot>('/fs/roots', { method: 'POST', body }),
             remove: (id: string) => t.json<void>(`/fs/roots/${enc(id)}`, { method: 'DELETE' }),
+        },
+
+        mcpServers: {
+            /** MCP 服务器(stdio,ADR 0013);只能由用户增删改。 */
+            list: () => t.json<Page<McpServerView>>('/mcp/servers'),
+            add: (body: McpServerInput) => t.json<McpServerView>('/mcp/servers', { method: 'POST', body }),
+            update: (id: string, body: McpServerPatch) =>
+                t.json<McpServerView>(`/mcp/servers/${enc(id)}`, { method: 'PATCH', body }),
+            remove: (id: string) => t.json<void>(`/mcp/servers/${enc(id)}`, { method: 'DELETE' }),
+            status: (id: string) => t.json<McpServerStatus>(`/mcp/servers/${enc(id)}/status`),
         },
 
         preauthorizations: {
