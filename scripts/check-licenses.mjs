@@ -21,11 +21,20 @@ const ALLOWED = new Set([
     'Zlib',
 ]);
 /**
- * 人工核对过的例外:package.json 没有写 SPDX 标识的包。只用于开发依赖,写明核对结果。
+ * 人工核对过的例外:package.json 没有写合法 SPDX 标识的包,写明核对结果。
  * - @modelcontextprotocol/server-filesystem:「SEE LICENSE IN LICENSE」,仓库 LICENSE 为 MIT 与 Apache-2.0
  *   (许可证迁移期),只作为 MCP 客户端集成测试用的官方示例服务器(ADR 0013 第 1 节)。
  */
-const REVIEWED = new Map([['@modelcontextprotocol/server-filesystem', 'MIT OR Apache-2.0']]);
+const REVIEWED = new Map([
+    ['@modelcontextprotocol/server-filesystem', 'MIT OR Apache-2.0'],
+    // sqlite-vec 的 package.json 写的是「MIT OR Apache」(不是合法的 SPDX);上游仓库为 MIT 与 Apache-2.0 双许可(ADR 0014)
+    ['sqlite-vec', 'MIT OR Apache-2.0'],
+    ['sqlite-vec-darwin-arm64', 'MIT OR Apache-2.0'],
+    ['sqlite-vec-darwin-x64', 'MIT OR Apache-2.0'],
+    ['sqlite-vec-linux-arm64', 'MIT OR Apache-2.0'],
+    ['sqlite-vec-linux-x64', 'MIT OR Apache-2.0'],
+    ['sqlite-vec-windows-x64', 'MIT OR Apache-2.0'],
+]);
 /** 仅允许以未修改库形式使用,输出警告供人工确认。 */
 const WEAK_COPYLEFT = new Set(['MPL-2.0']);
 

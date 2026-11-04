@@ -3,6 +3,7 @@
 
 export * from './auth.js';
 export * from './common.js';
+export * from './embeddings.js';
 export * from './errors.js';
 export * from './events.js';
 export * from './fs.js';

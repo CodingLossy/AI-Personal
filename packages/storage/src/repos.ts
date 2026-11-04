@@ -22,6 +22,7 @@ import { createToolRepositories } from './tools.js';
 import { createFsRootRepository } from './fs-roots.js';
 import { createItemRepository } from './items.js';
 import { createMcpServerRepository } from './mcp.js';
+import { createEmbeddingStore } from './embeddings.js';
 import { decodeCursor, encodeCursor, type Page } from './cursor.js';
 import type { Connection } from './db.js';
 import { newId } from './ids.js';
@@ -116,6 +117,7 @@ export function createRepositories(conn: Connection, options: RepoOptions = {}) 
     // ---------- owners ----------
     const ownerQ = {
         count: sqlite.prepare<[], { n: number }>('SELECT count(*) AS n FROM owners'),
+        ids: sqlite.prepare<[], { id: string }>('SELECT id FROM owners ORDER BY created_at'),
         insert: sqlite.prepare(
             `INSERT INTO owners (id, username, password_hash, created_at, updated_at)
              VALUES (@id, @username, @passwordHash, @createdAt, @updatedAt)`,
@@ -127,6 +129,9 @@ export function createRepositories(conn: Connection, options: RepoOptions = {}) 
     const owners = {
         count(): number {
             return ownerQ.count.get()?.n ?? 0;
+        },
+        ids(): string[] {
+            return ownerQ.ids.all().map((r) => r.id);
         },
         create(input: { username: string; passwordHash: string }) {
             const at = iso();
@@ -502,6 +507,7 @@ export function createRepositories(conn: Connection, options: RepoOptions = {}) 
         fsRoots: createFsRootRepository(conn, now),
         items: createItemRepository(conn, now),
         mcpServers: createMcpServerRepository(conn, now),
+        embeddings: createEmbeddingStore(conn, now),
         ...createAuthRepositories(conn, now),
     };
 }

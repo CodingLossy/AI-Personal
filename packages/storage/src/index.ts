@@ -13,6 +13,15 @@ export { newId } from './ids.js';
 export type { NewMemory, SessionSummary } from './memory.js';
 export type { ModelProfileRecord } from './profiles.js';
 export type { NewApprovalRequest, NewAuditEntry } from './tools.js';
+export {
+    type EmbedCounts,
+    type EmbedJob,
+    type EmbedState,
+    type EmbeddingStore,
+    MAX_EMBED_ATTEMPTS,
+    VECTOR_TABLE,
+    type VectorMatch,
+} from './embeddings.js';
 export { ItemCycleError, type ItemInput, type ItemRepository } from './items.js';
 export {
     checksum,
