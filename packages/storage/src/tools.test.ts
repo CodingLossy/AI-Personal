@@ -125,3 +125,15 @@ describe('audit', () => {
         expect(audit.list(t.ownerId, { limit: 10 }).items.map((x) => x.id)).toEqual([c.id]);
     });
 });
+
+describe('fsRoots', () => {
+    it('按 owner 隔离;同一路径不能重复;删除后不再列出', () => {
+        const root = t.repos.fsRoots.create(t.ownerId, { path: '/home/u/docs', label: 'Docs' });
+        expect(t.repos.fsRoots.list(t.ownerId)).toEqual([root]);
+        expect(() => t.repos.fsRoots.create(t.ownerId, { path: '/home/u/docs', label: 'again' })).toThrow();
+        expect(t.repos.fsRoots.get('someone-else', root.id)).toBeNull();
+        expect(t.repos.fsRoots.delete('someone-else', root.id)).toBe(false);
+        expect(t.repos.fsRoots.delete(t.ownerId, root.id)).toBe(true);
+        expect(t.repos.fsRoots.list(t.ownerId)).toEqual([]);
+    });
+});
