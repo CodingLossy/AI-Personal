@@ -33,6 +33,7 @@
   "dependencies": {
     "@ai-personal/providers": "workspace:*",
     "@ai-personal/shared": "workspace:*",
-    "@ai-personal/storage": "workspace:*"
+    "@ai-personal/storage": "workspace:*",
+    "@ai-personal/tools": "workspace:*"
   }
 }

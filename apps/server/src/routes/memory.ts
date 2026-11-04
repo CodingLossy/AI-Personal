@@ -2,10 +2,8 @@
 // Copyright (C) 2026 尹绪柏 (Theodore Yin)
 
 import { createRoute, z } from '@hono/zod-openapi';
-import type { RunManager } from '@ai-personal/agent';
 import type { MemoryService } from '@ai-personal/memory';
 import {
-    ApprovalDecision,
     Id,
     Memory,
     MemoryPatch,
@@ -85,32 +83,14 @@ const deleteRoute = createRoute({
     responses: { 204: { description: 'Deleted' }, 404: problem('Not found'), ...authErrors },
 });
 
-const approvalRoute = createRoute({
-    method: 'post',
-    path: '/approvals/{callId}',
-    tags: ['runs'],
-    summary: 'Approve or reject a pending tool call',
-    request: {
-        params: z.object({ callId: Id }),
-        body: { content: { 'application/json': { schema: ApprovalDecision } }, required: true },
-    },
-    responses: {
-        200: json(z.object({ callId: Id, decision: ApprovalDecision.shape.decision }), 'Decision recorded'),
-        400: problem('Invalid request, or pre-authorization (remember) is not available'),
-        409: problem('No pending approval with this id'),
-        ...authErrors,
-    },
-});
-
 export interface MemoryRouteDeps {
     repos: Repositories;
     memory: MemoryService;
-    runs: RunManager;
     detectCredential: (text: string) => string | null;
 }
 
 export function memoryRoutes(deps: MemoryRouteDeps) {
-    const { repos, memory, runs } = deps;
+    const { repos, memory } = deps;
     return router()
         .openapi(listRoute, (c) =>
             c.json({ items: repos.memories.list(requireOwner(c), c.req.valid('query').limit), nextCursor: null }, 200),
@@ -143,27 +123,5 @@ export function memoryRoutes(deps: MemoryRouteDeps) {
             if (!repos.memories.delete(ownerId, id)) throw notFound('Memory');
             c.get('logger').info({ memoryId: id }, 'memory forgotten');
             return c.body(null, 204);
-        })
-        .openapi(approvalRoute, (c) => {
-            const { callId } = c.req.valid('param');
-            const { decision, remember } = c.req.valid('json');
-            // 预授权在 M2 PR 2 实现(ADR 0010 第 3 节);在那之前明确拒绝,而不是静默忽略
-            if (remember) {
-                throw new ApiError(
-                    400,
-                    'validation_failed',
-                    'Bad Request',
-                    'Pre-authorization (remember) is not available on this server yet.',
-                );
-            }
-            if (!runs.resolveApproval(requireOwner(c), callId, decision)) {
-                throw new ApiError(
-                    409,
-                    'approval_not_pending',
-                    'Conflict',
-                    'There is no pending approval with this id.',
-                );
-            }
-            return c.json({ callId, decision }, 200);
         });
 }

@@ -24,11 +24,14 @@ import { memoryRoutes } from './routes/memory.js';
 import { modelRoutes } from './routes/models.js';
 import { runRoutes } from './routes/runs.js';
 import { settingsRoutes } from './routes/settings.js';
+import { toolRoutes } from './routes/tools.js';
 import { sessionRoutes } from './routes/sessions.js';
 import { tokenRoutes } from './routes/tokens.js';
 import { SERVER_VERSION } from './version.js';
 
 export interface AppDeps {
+    /** 审计中的脱敏(通常是 providers 的 Redactor)。 */
+    redact?: (text: string) => string;
     config: Pick<ServerConfig, 'sourceUrl' | 'webDir' | 'cookieSecure' | 'setupCode'>;
     repos: Repositories;
     logger: Logger;
@@ -140,7 +143,8 @@ export function createApp(deps: AppDeps): OpenAPIHono<AppEnv> {
         .route('/', settingsRoutes({ repos }))
         .route('/', sessionRoutes(runDeps))
         .route('/', runRoutes(runDeps))
-        .route('/', memoryRoutes({ repos, memory: deps.memory, runs: deps.runs, detectCredential }));
+        .route('/', memoryRoutes({ repos, memory: deps.memory, detectCredential }))
+        .route('/', toolRoutes({ repos, runs: deps.runs, redact: deps.redact ?? ((text) => text) }));
     app.route('/api/v1', v1);
 
     // OpenAPI 文档同样需要鉴权(业主决定;CI 另导出静态文件)

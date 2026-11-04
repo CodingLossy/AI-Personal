@@ -170,7 +170,7 @@ describe('memory.save 审批流程(验收:记住我住杭州 → 新会话问我
         expect(fake.requests.at(-1)!.messages.at(-1)).toMatchObject({ role: 'tool' });
     });
 
-    it('拒绝后不写入;重复审批或未知 callId 返回 409;暂不支持 remember', async () => {
+    it('拒绝后不写入;重复审批或未知 callId 返回 409;拒绝时不能带 remember', async () => {
         const { fake, post, req, newSession } = await setup();
         const session = await newSession();
         fake.steps.push(callTool('memory.save', { text: '用户喜欢喝龙井' }));
@@ -179,9 +179,9 @@ describe('memory.save 审批流程(验收:记住我住杭州 → 新会话问我
         await readSse(await post(`/api/v1/sessions/${session.id}/messages`, { text: '记住我喜欢龙井' }), async (e) => {
             if (e.event.type === 'approval-required') {
                 callId = e.event.callId;
-                // 预授权在 M2 PR 2 才实现:带 remember 的批准被拒绝,审批仍然待处理
+                // remember 只能在批准时使用:带 remember 的拒绝返回 400,审批仍然待处理
                 const remembered = await post(`/api/v1/approvals/${callId}`, {
-                    decision: 'approve',
+                    decision: 'reject',
                     remember: { scope: 'always' },
                 });
                 expect(remembered.status).toBe(400);

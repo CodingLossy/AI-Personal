@@ -8,7 +8,7 @@ import { EventBus, RunManager } from '@ai-personal/agent';
 import { createMemoryService } from '@ai-personal/memory';
 import { createProvider, Redactor, SecretStore } from '@ai-personal/providers';
 import { createRepositories, openStorage } from '@ai-personal/storage';
-import { createMemoryTools, createSummarizer } from './agent-setup.js';
+import { createSummarizer, createToolRegistry } from './agent-setup.js';
 import { createApp } from './app.js';
 import { randomToken } from './auth/crypto.js';
 import { loadConfig } from './config.js';
@@ -48,14 +48,25 @@ const runs = new RunManager({
     repos,
     bus,
     providerFor,
-    tools: createMemoryTools(memory),
+    tools: createToolRegistry(memory),
+    redact: (text) => redactor.redact(text),
     summarize: createSummarizer(repos, providerFor),
     onError: (err, { runId }) => logger.error({ err, runId }, 'run failed unexpectedly'),
 });
 const interrupted = runs.recoverInterrupted();
 if (interrupted > 0) logger.warn({ count: interrupted }, 'marked runs interrupted by the previous shutdown as failed');
 
-const app = createApp({ config: { ...config, setupCode }, repos, logger, secrets, providerDeps, bus, runs, memory });
+const app = createApp({
+    config: { ...config, setupCode },
+    repos,
+    logger,
+    secrets,
+    providerDeps,
+    bus,
+    runs,
+    memory,
+    redact: (text) => redactor.redact(text),
+});
 
 const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
     logger.info({ host: info.address, port: info.port, dataDir: config.dataDir }, 'listening');
