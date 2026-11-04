@@ -353,14 +353,4 @@ describe('selectProfile', () => {
         expect(selectProfile([a, b], 'chat', { chat: 'B' })?.id).toBe('B');
         expect(selectProfile([], 'chat')).toBeNull();
     });
-
-    it('Anthropic / Gemini 暂不支持,给出明确错误', async () => {
-        const redactor = new Redactor();
-        const p = createProvider(profile({ kind: 'anthropic', baseURL: undefined }), {
-            secrets: new SecretStore({ dataDir: tmpdir(), redactor }),
-            redactor,
-        });
-        expect(await p.test()).toMatchObject({ ok: false, error: 'bad_request' });
-        await expect(collect(p.stream({ messages: [] }))).rejects.toThrow(/not supported yet/);
-    });
 });
