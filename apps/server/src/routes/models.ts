@@ -13,6 +13,8 @@ export interface ModelRouteDeps {
     repos: Repositories;
     secrets: SecretStore;
     providerDeps: ProviderDeps;
+    /** 配置档变化后调用(例如让嵌入队列重新检查 embed 配置档,ADR 0014)。 */
+    onChanged?: () => void;
 }
 
 const idParam = z.object({ id: Id });
@@ -93,6 +95,7 @@ export function modelRoutes(deps: ModelRouteDeps) {
         .openapi(createProfileRoute, (c) => {
             const created = repos.modelProfiles.create(requireOwner(c), c.req.valid('json'));
             c.get('logger').info({ profileId: created.id, kind: created.kind }, 'model profile created');
+            deps.onChanged?.();
             return c.json(withStatus(created), 201);
         })
         .openapi(getRoute, (c) => {
@@ -122,10 +125,13 @@ export function modelRoutes(deps: ModelRouteDeps) {
                 ),
             );
             if (!merged.success) throw validationError(merged.error);
-            return c.json(withStatus(repos.modelProfiles.replace(ownerId, id, merged.data)!), 200);
+            const replaced = repos.modelProfiles.replace(ownerId, id, merged.data)!;
+            deps.onChanged?.();
+            return c.json(withStatus(replaced), 200);
         })
         .openapi(deleteRoute, (c) => {
             if (!repos.modelProfiles.delete(requireOwner(c), c.req.valid('param').id)) throw notFound('Model profile');
+            deps.onChanged?.();
             return c.body(null, 204);
         })
         .openapi(testRoute, async (c) => {

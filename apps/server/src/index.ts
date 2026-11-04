@@ -12,6 +12,7 @@ import { createRepositories, openStorage } from '@ai-personal/storage';
 import { createSummarizer, createToolRegistry } from './agent-setup.js';
 import { createApp } from './app.js';
 import { createMcpControl } from './mcp-setup.js';
+import { createEmbeddingService } from './embeddings.js';
 import { randomToken } from './auth/crypto.js';
 import { loadConfig } from './config.js';
 import { createLogger } from './log.js';
@@ -70,7 +71,17 @@ for (const server of repos.mcpServers.allEnabled()) {
     void mcp.apply(server).then((status) => logger.info({ mcpServer: server.name, state: status.state }, 'MCP server'));
 }
 
+// 嵌入队列:有 embed 配置档或已有向量表时才加载 sqlite-vec(ADR 0014)
+const embeddings = createEmbeddingService({
+    repos,
+    providerFor,
+    redact: (text) => redactor.redact(text),
+    onError: (err) => logger.warn({ err }, 'embedding failed'),
+});
+embeddings.start(repos.owners.ids());
+
 const app = createApp({
+    embeddings,
     config: { ...config, setupCode },
     repos,
     logger,
@@ -93,6 +104,7 @@ function shutdown(signal: string): void {
     logger.info({ signal }, 'shutdown');
     websockets.close();
     mcp.closeAll();
+    embeddings.stop();
     server.close(() => {
         conn.close();
         process.exit(0);

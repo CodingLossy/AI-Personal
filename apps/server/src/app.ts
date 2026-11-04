@@ -7,7 +7,7 @@ import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { type HealthResponse, MetaResponseSchema, PROTOCOL_VERSION, SERVER_LICENSE } from '@ai-personal/shared';
 import type { EventBus, RunManager } from '@ai-personal/agent';
 import { detectCredential, type MemoryService } from '@ai-personal/memory';
-import type { ProviderDeps, SecretStore } from '@ai-personal/providers';
+import { createProvider, type ProviderDeps, type SecretStore } from '@ai-personal/providers';
 import { newId, type Repositories } from '@ai-personal/storage';
 import type { Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -28,6 +28,8 @@ import type { ItemService } from '@ai-personal/items';
 import { fsRoutes } from './routes/fs.js';
 import { itemRoutes } from './routes/items.js';
 import { mcpRoutes } from './routes/mcp.js';
+import { embeddingRoutes } from './routes/embeddings.js';
+import { createEmbeddingService, type EmbeddingService } from './embeddings.js';
 import { createMcpControl, type McpControl } from './mcp-setup.js';
 import { toolRoutes } from './routes/tools.js';
 import { sessionRoutes } from './routes/sessions.js';
@@ -35,6 +37,8 @@ import { tokenRoutes } from './routes/tokens.js';
 import { SERVER_VERSION } from './version.js';
 
 export interface AppDeps {
+    /** 嵌入队列与向量索引(ADR 0014);不给时按需创建(不会自动开始处理队列)。 */
+    embeddings?: EmbeddingService;
     /** MCP 服务器的连接管理(ADR 0013);不给时按需创建。 */
     mcp?: McpControl;
     /** 条目索引的同步与打开(ADR 0012)。 */
@@ -84,6 +88,13 @@ export function createApp(deps: AppDeps): OpenAPIHono<AppEnv> {
     const clientIp = deps.clientIp ?? tcpPeer;
     const app = new OpenAPIHono<AppEnv>();
     const runDeps = { repos, bus: deps.bus, runs: deps.runs, secrets: deps.secrets };
+    const embeddings =
+        deps.embeddings ??
+        createEmbeddingService({
+            repos,
+            providerFor: (profile) => createProvider(profile, deps.providerDeps),
+            ...(deps.redact ? { redact: deps.redact } : {}),
+        });
 
     app.onError(handleError);
 
@@ -148,7 +159,16 @@ export function createApp(deps: AppDeps): OpenAPIHono<AppEnv> {
             }),
         )
         .route('/', tokenRoutes({ repos, now }))
-        .route('/', modelRoutes({ repos, secrets: deps.secrets, providerDeps: deps.providerDeps }))
+        .route(
+            '/',
+            modelRoutes({
+                repos,
+                secrets: deps.secrets,
+                providerDeps: deps.providerDeps,
+                onChanged: () => embeddings.kick(),
+            }),
+        )
+        .route('/', embeddingRoutes({ embeddings }))
         .route('/', settingsRoutes({ repos }))
         .route('/', sessionRoutes(runDeps))
         .route('/', runRoutes(runDeps))

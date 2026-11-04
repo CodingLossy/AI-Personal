@@ -114,6 +114,13 @@ const zh = {
     'fsRoots.add': '授权',
     'fsRoots.remove': '撤销',
     'fsRoots.removeConfirm': '撤销对 {path} 的授权?这个文件夹内的写入预授权也会一并删除。',
+    'embed.title': '向量索引',
+    'embed.disabled': '没有 embed 用途的 OpenAI 兼容配置档,语义检索未启用(只用全文检索)。',
+    'embed.summary': '模型 {model} · 维度 {dims} · 已嵌入 {embedded} 条 · 排队 {queued} 条 · 今天 {today} / {limit}',
+    'embed.failed': '{n} 条多次失败,已停止重试;重建会重新尝试。',
+    'embed.rebuildHint': '现有向量来自 {old},与当前配置档 {model} 不一致,需要重建后才能继续嵌入与检索。',
+    'embed.rebuild': '重建',
+    'embed.rebuildConfirm': '删除现有向量并用当前配置档全部重新嵌入?重建期间语义检索不可用,会消耗嵌入额度。',
     'mcp.title': 'MCP 服务器',
     'mcp.hint':
         '本机启动的 MCP 服务器(stdio)。命令不经过 shell 运行,只拿到最少的环境变量;它的工具名为 mcp.<名字>.<工具>,默认每次调用都需要你批准,输出视为不可信内容。',
@@ -287,6 +294,17 @@ const en: Record<Key, string> = {
     'fsRoots.add': 'Authorize',
     'fsRoots.remove': 'Revoke',
     'fsRoots.removeConfirm': 'Revoke access to {path}? Write pre-authorizations inside this folder are removed too.',
+    'embed.title': 'Vector index',
+    'embed.disabled':
+        'No OpenAI-compatible profile with the embed purpose, so semantic search is off (full-text search only).',
+    'embed.summary':
+        'Model {model} · {dims} dimensions · {embedded} embedded · {queued} queued · today {today} / {limit}',
+    'embed.failed': '{n} item(s) failed repeatedly and are no longer retried; rebuilding tries them again.',
+    'embed.rebuildHint':
+        'The vectors come from {old}, which differs from the current profile {model}. Rebuild to keep embedding and searching.',
+    'embed.rebuild': 'Rebuild',
+    'embed.rebuildConfirm':
+        'Delete the existing vectors and re-embed everything with the current profile? Semantic search is unavailable until it finishes, and it uses embedding quota.',
     'mcp.title': 'MCP servers',
     'mcp.hint':
         'Local MCP servers (stdio). The command runs without a shell and gets a minimal environment; its tools are named mcp.<name>.<tool>, every call needs your approval by default, and their output is treated as untrusted.',
