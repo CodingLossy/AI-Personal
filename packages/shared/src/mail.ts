@@ -1,0 +1,191 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (C) 2026 尹绪柏 (Theodore Yin)
+
+// 邮件契约(ADR 0016,M3 PR 1)。全部是新增类型;REST 路径与工具 schema 随 M3 PR 2、PR 3 增加。
+import { z } from 'zod';
+import { Id, IsoDateTime } from './common.js';
+
+/**
+ * 邮箱密码 / 授权码的引用:env:NAME 或 file:NAME,与模型配置档的 apiKeyRef 规则相同(ADR 0006 第 2 节)。
+ * 邮箱一定需要密码,所以不能为 null;API 与 Web UI 不接收明文密码(ADR 0016 第 1 节)。
+ */
+export const MailSecretRef = z
+    .string()
+    .regex(/^(env|file):[A-Za-z_][A-Za-z0-9_]{0,63}$/, 'must be env:NAME or file:NAME');
+export type MailSecretRef = z.infer<typeof MailSecretRef>;
+
+/** 加密方式:tls 为直连 TLS(IMAP 993 / SMTP 465),starttls 为先明文再升级(SMTP 587);不支持不加密。 */
+export const MailSecurity = z.enum(['tls', 'starttls']);
+export type MailSecurity = z.infer<typeof MailSecurity>;
+
+/** 主机名:不含协议、路径、空白或凭据(user@host)。 */
+const Host = z
+    .string()
+    .min(1)
+    .max(253)
+    .regex(/^[A-Za-z0-9.-]+$|^\[[0-9A-Fa-f:.]+\]$/, 'must be a host name or a bracketed IPv6 address');
+
+export const MailServer = z.strictObject({
+    host: Host,
+    port: z.number().int().min(1).max(65_535),
+    security: MailSecurity,
+});
+export type MailServer = z.infer<typeof MailServer>;
+
+/** 邮箱地址:宽松校验(各家邮箱的地址规则不同),只排除明显不合法的值。 */
+export const MailAddressString = z
+    .string()
+    .trim()
+    .min(3)
+    .max(320)
+    .regex(/^[^\s@<>()",;]+@[^\s@<>()",;]+$/, 'must be an e-mail address');
+
+export const MailAddress = z.object({
+    /** 显示名;来自邮件头,是不可信文本。 */
+    name: z.string().max(200).nullable(),
+    address: MailAddressString,
+});
+export type MailAddress = z.infer<typeof MailAddress>;
+
+/** 未知字段一律拒绝,避免客户端误把明文密码放进其他字段后被静默丢弃(与 ModelProfileInput 一致)。 */
+const MailAccountFields = z.strictObject({
+    label: z.string().trim().min(1).max(60),
+    /** 发件地址。 */
+    address: MailAddressString,
+    /** 登录用户名;多数邮箱就是完整地址。 */
+    username: z.string().min(1).max(320),
+    passwordRef: MailSecretRef,
+    imap: MailServer,
+    smtp: MailServer,
+    /** 首次同步只拉最近 N 天(ADR 0016 第 2 节,默认 30)。 */
+    initialSyncDays: z.number().int().min(1).max(365).default(30),
+    /** 定时拉取的间隔(分钟,默认 5)。 */
+    syncIntervalMinutes: z.number().int().min(5).max(1440).default(5),
+    enabled: z.boolean().default(true),
+});
+
+export const MailAccountInput = MailAccountFields;
+export type MailAccountInput = z.input<typeof MailAccountInput>;
+
+/** PATCH:字段均可选,不带默认值(没给的字段保持不变)。 */
+export const MailAccountPatch = z.strictObject({
+    label: MailAccountFields.shape.label.optional(),
+    address: MailAddressString.optional(),
+    username: MailAccountFields.shape.username.optional(),
+    passwordRef: MailSecretRef.optional(),
+    imap: MailServer.optional(),
+    smtp: MailServer.optional(),
+    initialSyncDays: z.number().int().min(1).max(365).optional(),
+    syncIntervalMinutes: z.number().int().min(5).max(1440).optional(),
+    enabled: z.boolean().optional(),
+});
+export type MailAccountPatch = z.infer<typeof MailAccountPatch>;
+
+export const MailPasswordStatus = z.enum(['present', 'missing']);
+
+/** 账户响应:只返回密码引用与是否读得到,从不返回密码本身。 */
+export const MailAccount = MailAccountFields.extend({
+    id: Id,
+    passwordStatus: MailPasswordStatus,
+    /** 最近一次同步的时间与错误摘要(人能看懂、已脱敏)。 */
+    lastSyncedAt: IsoDateTime.nullable(),
+    lastError: z.string().max(500).nullable(),
+    createdAt: IsoDateTime,
+    updatedAt: IsoDateTime,
+});
+export type MailAccount = z.infer<typeof MailAccount>;
+
+export const MailFolder = z.object({
+    id: Id,
+    accountId: Id,
+    /** 服务器上的文件夹路径,如 INBOX、Sent。 */
+    path: z.string().min(1).max(1000),
+    /** 显示名。 */
+    name: z.string(),
+    /** IMAP 特殊用途(\\Inbox、\\Sent 等,去掉反斜杠后小写),没有时为 null。 */
+    specialUse: z.enum(['inbox', 'sent', 'drafts', 'junk', 'trash', 'archive', 'all', 'flagged']).nullable(),
+    /** UIDVALIDITY 变化时重建该文件夹的缓存(ADR 0016 第 2 节)。 */
+    uidValidity: z.number().int().nonnegative().nullable(),
+    /** 已同步的最大 UID。 */
+    lastUid: z.number().int().nonnegative(),
+    messageCount: z.number().int().nonnegative(),
+    unreadCount: z.number().int().nonnegative(),
+    lastSyncedAt: IsoDateTime.nullable(),
+});
+export type MailFolder = z.infer<typeof MailFolder>;
+
+/** 附件只有索引;内容只在用户要求时下载(ADR 0016 第 3 节)。 */
+export const MailAttachment = z.object({
+    id: Id,
+    filename: z.string().max(500),
+    contentType: z.string().max(200),
+    size: z.number().int().nonnegative(),
+    /** 是否已经下载到本地(例如加入了知识库)。 */
+    downloaded: z.boolean(),
+});
+export type MailAttachment = z.infer<typeof MailAttachment>;
+
+export const MailMessage = z.object({
+    id: Id,
+    accountId: Id,
+    folderId: Id,
+    uid: z.number().int().nonnegative(),
+    /** Message-ID 头(去掉尖括号);没有时为 null。 */
+    messageId: z.string().max(1000).nullable(),
+    inReplyTo: z.string().max(1000).nullable(),
+    references: z.array(z.string().max(1000)).max(500),
+    /** 会话串的键,由服务器计算(ADR 0016 第 4 节)。 */
+    threadKey: z.string().min(1).max(200),
+    from: MailAddress.nullable(),
+    to: z.array(MailAddress),
+    cc: z.array(MailAddress),
+    subject: z.string().max(2000),
+    /** 邮件头中的日期;解析不了时取收到的时间。 */
+    date: IsoDateTime,
+    /** 只在本地记录,不回写服务器(ADR 0016 第 2 节)。 */
+    unread: z.boolean(),
+    /** 纯文本正文(HTML 转纯文本);列表接口中可以省略。 */
+    text: z.string().optional(),
+    /** 正文的前 200 字,供列表显示。 */
+    snippet: z.string().max(200),
+    attachments: z.array(MailAttachment),
+});
+export type MailMessage = z.infer<typeof MailMessage>;
+
+export const MailThread = z.object({
+    threadKey: z.string().min(1).max(200),
+    accountId: Id,
+    subject: z.string().max(2000),
+    participants: z.array(MailAddress),
+    messageCount: z.number().int().positive(),
+    unreadCount: z.number().int().nonnegative(),
+    lastMessageAt: IsoDateTime,
+    /** 最后一封邮件的 id。 */
+    lastMessageId: Id,
+});
+export type MailThread = z.infer<typeof MailThread>;
+
+/** 本地草稿(ADR 0016 第 6 节):只保存在本地,发送一定要审批。 */
+export const MailDraftInput = z.strictObject({
+    accountId: Id,
+    to: z.array(MailAddressString).min(1).max(100),
+    cc: z.array(MailAddressString).max(100).default([]),
+    subject: z.string().max(2000),
+    text: z.string().max(100_000),
+    /** 回复哪一封邮件;发送时据此设置 In-Reply-To / References。 */
+    replyToMessageId: Id.optional(),
+});
+export type MailDraftInput = z.input<typeof MailDraftInput>;
+
+export const MailDraft = z.object({
+    id: Id,
+    accountId: Id,
+    to: z.array(MailAddressString),
+    cc: z.array(MailAddressString),
+    subject: z.string(),
+    text: z.string(),
+    replyToMessageId: Id.nullable(),
+    createdAt: IsoDateTime,
+    updatedAt: IsoDateTime,
+});
+export type MailDraft = z.infer<typeof MailDraft>;
