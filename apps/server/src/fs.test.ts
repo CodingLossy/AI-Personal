@@ -102,6 +102,18 @@ describe('/api/v1/fs/roots 与文件工具', () => {
         expect((await s.app.request('/api/v1/fs/roots')).status).toBe(401);
         const list = pageOf(FsRoot).parse(await (await req('/api/v1/fs/roots')).json()).items;
         expect(list).toHaveLength(1);
+        // 默认不进入知识库;PATCH 切换(ADR 0015 第 6 节)
+        expect(list[0]!.knowledgeBase).toBe(false);
+        const patched = await req(`/api/v1/fs/roots/${list[0]!.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ knowledgeBase: true }),
+        });
+        expect(FsRoot.parse(await patched.json()).knowledgeBase).toBe(true);
+        const missing = await req('/api/v1/fs/roots/01M00000000000000000000000', {
+            method: 'PATCH',
+            body: JSON.stringify({ knowledgeBase: true }),
+        });
+        expect(missing.status).toBe(404);
     });
 
     it('越权路径被拒绝并有审计;按目录预授权写入;撤销目录时删除相关预授权', async () => {

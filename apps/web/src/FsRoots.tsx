@@ -45,6 +45,16 @@ export function FsRoots() {
         await reload();
     };
 
+    /** 是否进入知识库(默认不进入,ADR 0015 第 6 节)。 */
+    const toggleKb = async (root: FsRoot, enabled: boolean) => {
+        try {
+            await api.fsRoots.update(root.id, { knowledgeBase: enabled });
+        } catch (err) {
+            setError(errorText(err));
+        }
+        await reload();
+    };
+
     const remove = async (root: FsRoot) => {
         if (!window.confirm(t('fsRoots.removeConfirm', { path: root.path }))) return;
         try {
@@ -68,6 +78,14 @@ export function FsRoots() {
                             <strong>{r.label}</strong>
                             {r.label !== r.path ? <span className="small muted"> · {r.path}</span> : null}
                         </div>
+                        <label className="small">
+                            <input
+                                type="checkbox"
+                                checked={r.knowledgeBase}
+                                onChange={(e) => void toggleKb(r, e.target.checked)}
+                            />{' '}
+                            {t('fsRoots.knowledgeBase')}
+                        </label>
                         <button type="button" className="danger" onClick={() => void remove(r)}>
                             {t('fsRoots.remove')}
                         </button>

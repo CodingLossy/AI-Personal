@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { CREDENTIAL_NEGATIVES, CREDENTIAL_POSITIVES } from './fixtures/credential-corpus.js';
-import { detectCredential, detectCredentialIn } from './secrets.js';
+import { detectCredential, detectCredentialIn, redactCredentials } from './secrets.js';
 import { chineseIdValid, luhnValid, redactSensitive, redactSensitiveIn } from './sensitive.js';
 
 describe('凭据检测语料评测', () => {
@@ -20,6 +20,16 @@ describe('凭据检测语料评测', () => {
     it('反例误报 ≤ 5%', () => {
         const flagged = CREDENTIAL_NEGATIVES.filter((t) => detectCredential(t) !== null);
         expect(flagged.length / CREDENTIAL_NEGATIVES.length).toBeLessThanOrEqual(0.05);
+    });
+
+    it('redactCredentials:正例都能定位并替换,替换后不再检出;反例原样保留(知识库入库前用)', () => {
+        for (const text of CREDENTIAL_POSITIVES) {
+            const r = redactCredentials(text);
+            expect(r.count, text).toBeGreaterThan(0);
+            expect(detectCredential(r.text), r.text).toBeNull();
+        }
+        const changed = CREDENTIAL_NEGATIVES.filter((t) => redactCredentials(t).text !== t);
+        expect(changed.length / CREDENTIAL_NEGATIVES.length).toBeLessThanOrEqual(0.05);
     });
 
     it('JSON 值中的凭据也能检测到', () => {

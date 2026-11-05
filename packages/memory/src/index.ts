@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 尹绪柏 (Theodore Yin)
 
-export { type CredentialKind, detectCredential, detectCredentialIn } from './secrets.js';
+export {
+    CREDENTIAL_PLACEHOLDER,
+    type CredentialKind,
+    detectCredential,
+    detectCredentialIn,
+    redactCredentials,
+} from './secrets.js';
 export { type Redaction, redactSensitive, redactSensitiveIn, type SensitiveKind } from './sensitive.js';
 export { type EntityKeySpec, isProfileKey, normalizeEntityKey, type NormalizedKey } from './entity-keys.js';
 export {

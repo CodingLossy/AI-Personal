@@ -110,6 +110,41 @@ export function detectCredential(text: string): CredentialKind | null {
     return hasHighEntropyToken(text) ? 'high_entropy' : null;
 }
 
+/** 替换凭据时使用的占位文字。 */
+export const CREDENTIAL_PLACEHOLDER = '[已隐藏凭据]';
+
+/**
+ * 把文本中能定位的凭据替换为占位文字(知识库入库前使用,ADR 0015 第 7 节);返回替换后的文本与替换次数。
+ * 规则与 detectCredential 相同;替换后仍能检测到凭据时,调用方应整段拦截。
+ */
+export function redactCredentials(text: string): { text: string; count: number } {
+    let count = 0;
+    let out = text;
+    for (const [, pattern] of PATTERNS) {
+        const global = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`);
+        out = out.replace(global, () => {
+            count++;
+            return CREDENTIAL_PLACEHOLDER;
+        });
+    }
+    for (const hint of [...out.matchAll(TOTP_HINT)].reverse()) {
+        const start = hint.index + hint[0].length;
+        const window = out.slice(start, start + TOTP_WINDOW);
+        const seed = BASE32_SEED.exec(window);
+        if (!seed) continue;
+        const at = start + seed.index;
+        out = `${out.slice(0, at)}${CREDENTIAL_PLACEHOLDER}${out.slice(at + seed[0].length)}`;
+        count++;
+    }
+    out = out.replace(/[^\s"'`,;()[\]{}<>，。；：（）、「」《》]{20,}/g, (token) => {
+        if (token.includes('://') || !/[A-Za-z]/.test(token) || !/\d/.test(token)) return token;
+        if (shannonEntropy(token) < HIGH_ENTROPY_MIN_BITS) return token;
+        count++;
+        return CREDENTIAL_PLACEHOLDER;
+    });
+    return { text: out, count };
+}
+
 /** 检测任意 JSON 值(键与值都查)。 */
 export function detectCredentialIn(value: unknown): CredentialKind | null {
     if (value === null || value === undefined) return null;
