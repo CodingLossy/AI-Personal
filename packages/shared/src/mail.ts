@@ -225,3 +225,33 @@ export const MailSendInput = z.strictObject({
     draftId: Id,
 });
 export type MailSendInput = z.infer<typeof MailSendInput>;
+
+/** 常见邮箱的默认服务器与授权码说明(ADR 0016 第 1 节;GET /mail/presets)。 */
+export const MailPreset = z.object({
+    id: z.string(),
+    label: z.string(),
+    imap: MailServer,
+    smtp: MailServer,
+    appendToSent: z.boolean(),
+    /** 如何开启 IMAP 与取得授权码 / 应用专用密码。 */
+    help: z.string(),
+});
+export type MailPreset = z.infer<typeof MailPreset>;
+
+/** POST /mail/accounts/{id}/test 的结果:分别测 IMAP 与 SMTP,错误是人能看懂、已脱敏的说明。 */
+export const MailConnectionCheck = z.object({ ok: z.boolean(), error: z.string().max(500).nullable() });
+export const MailConnectionTest = z.object({ imap: MailConnectionCheck, smtp: MailConnectionCheck });
+export type MailConnectionTest = z.infer<typeof MailConnectionTest>;
+
+/** POST /mail/accounts/{id}/sync 的结果。 */
+export const MailSyncResult = z.object({
+    ok: z.boolean(),
+    error: z.string().max(500).nullable(),
+    /** 新增、更新已读状态、删除的邮件数。 */
+    added: z.number().int().nonnegative(),
+    updated: z.number().int().nonnegative(),
+    removed: z.number().int().nonnegative(),
+    /** 还有没拉完的新邮件(每次每个文件夹最多拉一批),会很快自动继续。 */
+    more: z.boolean(),
+});
+export type MailSyncResult = z.infer<typeof MailSyncResult>;

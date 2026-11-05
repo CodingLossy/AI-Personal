@@ -302,7 +302,8 @@ describe('列清单与迁移 SQL 一致', () => {
             t.conn.sqlite
                 .prepare(
                     `SELECT name FROM sqlite_master WHERE type = 'table'
-                     AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'items_fts%' AND name NOT LIKE 'kb_chunks_fts%' AND name <> 'schema_migrations'`,
+                     AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'items_fts%' AND name NOT LIKE 'kb_chunks_fts%'
+                     AND name NOT LIKE 'mail_fts%' AND name <> 'schema_migrations'`,
                 )
                 .all() as { name: string }[]
         ).map((r) => r.name);

@@ -51,6 +51,7 @@ export {
     type MigrateOptions,
     type MigrateResult,
 } from './migrate.js';
+export type { MailAccountCreate, MailAccountRecord, MailFolderSync, MailKnownFolder, MailMessageSync } from './mail.js';
 export { migrations } from './migrations/index.js';
 export { createRepositories, type AppendMessageInput, type PageRequest, type Repositories } from './repos.js';
 export { TABLE_COLUMNS, type TableName } from './schema.js';

@@ -26,6 +26,7 @@ import { createItemRepository } from './items.js';
 import { createMcpServerRepository } from './mcp.js';
 import { createEmbeddingStore } from './embeddings.js';
 import { createKbRepository } from './kb.js';
+import { createMailRepository } from './mail.js';
 import { decodeCursor, encodeCursor, type Page } from './cursor.js';
 import type { Connection } from './db.js';
 import { newId } from './ids.js';
@@ -515,6 +516,7 @@ export function createRepositories(conn: Connection, options: RepoOptions = {}) 
         mcpServers: createMcpServerRepository(conn, now),
         embeddings: createEmbeddingStore(conn, now),
         kb: createKbRepository(conn, now),
+        mail: createMailRepository(conn, now),
         ...createAuthRepositories(conn, now),
     };
 }

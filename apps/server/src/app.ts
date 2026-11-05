@@ -32,6 +32,8 @@ import { mcpRoutes } from './routes/mcp.js';
 import { embeddingRoutes } from './routes/embeddings.js';
 import { createEmbeddingService, type EmbeddingService } from './embeddings.js';
 import { createMcpControl, type McpControl } from './mcp-setup.js';
+import { createMailService, type MailService } from './mail-setup.js';
+import { mailRoutes } from './routes/mail.js';
 import { toolRoutes } from './routes/tools.js';
 import { sessionRoutes } from './routes/sessions.js';
 import { tokenRoutes } from './routes/tokens.js';
@@ -42,6 +44,8 @@ export interface AppDeps {
     embeddings?: EmbeddingService;
     /** MCP 服务器的连接管理(ADR 0013);不给时按需创建。 */
     mcp?: McpControl;
+    /** 邮件同步(ADR 0016);不给时按需创建(不会自动开始定时同步)。 */
+    mail?: MailService;
     /** 条目索引的同步与打开(ADR 0012)。 */
     items: ItemService;
     /** 审计中的脱敏(通常是 providers 的 Redactor)。 */
@@ -183,6 +187,16 @@ export function createApp(deps: AppDeps): OpenAPIHono<AppEnv> {
                 repos,
                 mcp: deps.mcp ?? createMcpControl(deps.runs.tools),
                 redact: deps.redact ?? ((text) => text),
+            }),
+        )
+        .route(
+            '/',
+            mailRoutes({
+                repos,
+                secrets: deps.secrets,
+                mail:
+                    deps.mail ??
+                    createMailService({ repos, secrets: deps.secrets, redact: deps.redact ?? ((text) => text), now }),
             }),
         );
     app.route('/api/v1', v1);
