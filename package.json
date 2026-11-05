@@ -25,6 +25,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "test:e2e": "pnpm --filter @ai-personal/web test:e2e",
+    "eval": "pnpm --filter @ai-personal/eval run eval",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check:spdx": "node scripts/check-spdx.mjs",

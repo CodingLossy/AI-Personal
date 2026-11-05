@@ -17,9 +17,10 @@
 | `pnpm format` / `pnpm format:check`                                   | Prettier                                              |
 | `pnpm check:spdx` / `pnpm check:licenses` / `pnpm check:placeholders` | 许可证头、依赖白名单、占位符残留                      |
 | `pnpm --filter @ai-personal/server test`                              | 只跑某个包                                            |
+| `pnpm test:e2e` / `pnpm eval`                                         | Playwright 冒烟 / 记忆评测(召回率、过时率、错误率)    |
 | `docker compose -f docker/docker-compose.yml up --build`              | 本地容器运行                                          |
 
-以后加入:`pnpm test:e2e`、`pnpm eval`、`pnpm --filter desktop tauri build`。
+以后加入:`pnpm --filter desktop tauri build`。
 
 ## 目录约定
 

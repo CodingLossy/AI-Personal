@@ -28,7 +28,8 @@ const fact = (text: string, over: Partial<NewMemory> = {}): NewMemory => ({
 
 describe('memoryRead', () => {
     it('二字词去掉虚词与泛词', () => {
-        expect(cjkBigrams('我还住在杭州吗?')).toEqual(['杭州']);
+        expect(cjkBigrams('我还住在杭州吗?')).toEqual(['还住', '住在', '在杭', '杭州']);
+        expect(cjkBigrams('我对什么过敏')).toEqual(['对什', '过敏']);
         expect(cjkBigrams('用户喜欢喝龙井')).toEqual(['户喜', '喜欢', '欢喝', '喝龙', '龙井']);
         expect(cjkBigrams('hello')).toEqual([]);
     });
