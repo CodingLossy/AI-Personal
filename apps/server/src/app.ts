@@ -25,7 +25,7 @@ import { memoryRoutes } from './routes/memory.js';
 import { modelRoutes } from './routes/models.js';
 import { runRoutes } from './routes/runs.js';
 import { settingsRoutes } from './routes/settings.js';
-import type { ItemService } from '@ai-personal/items';
+import type { ItemService, KnowledgeBase } from '@ai-personal/items';
 import { fsRoutes } from './routes/fs.js';
 import { itemRoutes } from './routes/items.js';
 import { mcpRoutes } from './routes/mcp.js';
@@ -34,6 +34,7 @@ import { createEmbeddingService, type EmbeddingService } from './embeddings.js';
 import { createMcpControl, type McpControl } from './mcp-setup.js';
 import { createMailService, type MailService } from './mail-setup.js';
 import { mailRoutes } from './routes/mail.js';
+import { mailMessageRoutes } from './routes/mail-messages.js';
 import { toolRoutes } from './routes/tools.js';
 import { sessionRoutes } from './routes/sessions.js';
 import { tokenRoutes } from './routes/tokens.js';
@@ -46,6 +47,8 @@ export interface AppDeps {
     mcp?: McpControl;
     /** 邮件同步(ADR 0016);不给时按需创建(不会自动开始定时同步)。 */
     mail?: MailService;
+    /** 知识库(ADR 0015):邮件附件入库、删除账户后的清理。 */
+    kb?: KnowledgeBase;
     /** 条目索引的同步与打开(ADR 0012)。 */
     items: ItemService;
     /** 审计中的脱敏(通常是 providers 的 Redactor)。 */
@@ -100,6 +103,9 @@ export function createApp(deps: AppDeps): OpenAPIHono<AppEnv> {
             providerFor: (profile) => createProvider(profile, deps.providerDeps),
             ...(deps.redact ? { redact: deps.redact } : {}),
         });
+
+    const mail =
+        deps.mail ?? createMailService({ repos, secrets: deps.secrets, redact: deps.redact ?? ((text) => text), now });
 
     app.onError(handleError);
 
@@ -191,12 +197,22 @@ export function createApp(deps: AppDeps): OpenAPIHono<AppEnv> {
         )
         .route(
             '/',
-            mailRoutes({
+            mailRoutes({ repos, secrets: deps.secrets, mail, items: deps.items, ...(deps.kb ? { kb: deps.kb } : {}) }),
+        )
+        .route(
+            '/',
+            mailMessageRoutes({
                 repos,
-                secrets: deps.secrets,
-                mail:
-                    deps.mail ??
-                    createMailService({ repos, secrets: deps.secrets, redact: deps.redact ?? ((text) => text), now }),
+                attachments: {
+                    items: deps.items,
+                    kb: deps.kb ?? {
+                        indexContent: () => {
+                            throw new Error('the knowledge base is not available on this server');
+                        },
+                    },
+                    runner: mail.runner,
+                    secret: (ref) => deps.secrets.resolve(ref),
+                },
             }),
         );
     app.route('/api/v1', v1);

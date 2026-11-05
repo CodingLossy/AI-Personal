@@ -35,7 +35,20 @@ export interface MailListQuery {
     unreadOnly?: boolean | undefined;
     /** 只列出这个时间及之后的邮件(ISO)。 */
     since?: string | undefined;
+    /** 只列出早于这个时间的邮件(ISO;Web 翻页用)。 */
+    before?: string | undefined;
     limit: number;
+}
+
+/** 条目索引需要的邮件信息(不含正文)。 */
+export interface MailItemRow {
+    id: string;
+    folderId: string;
+    threadKey: string;
+    subject: string;
+    from: MailAddress | null;
+    date: string;
+    attachments: { id: string; filename: string; size: number }[];
 }
 
 export interface MailDraftCreate {
@@ -118,6 +131,38 @@ export function createMailCacheRepository(conn: Connection, now: () => Date) {
              FROM mail_drafts d JOIN mail_accounts a ON a.id = d.account_id WHERE a.owner_id = ? AND d.id = ?`,
         ),
         draftDelete: sqlite.prepare<[string]>('DELETE FROM mail_drafts WHERE id = ?'),
+        draftIds: sqlite.prepare<[string], { id: string }>(
+            `SELECT d.id FROM mail_drafts d JOIN mail_accounts a ON a.id = d.account_id
+             WHERE a.owner_id = ? ORDER BY d.updated_at DESC LIMIT 200`,
+        ),
+        draftUpdate: sqlite.prepare(
+            `UPDATE mail_drafts SET to_json = @to, cc_json = @cc, subject = @subject, body = @text, updated_at = @at
+             WHERE id = @id`,
+        ),
+        itemRows: sqlite.prepare<
+            [string],
+            { id: string; folderId: string; threadKey: string; subject: string; fromJson: string | null; date: string }
+        >(
+            `SELECT m.id, mf.folder_id AS folderId, m.thread_key AS threadKey, m.subject, m.from_json AS fromJson, m.date
+             FROM mail_messages m
+             JOIN mail_message_folders mf ON mf.message_id = m.id
+               AND mf.rowid = (SELECT min(x.rowid) FROM mail_message_folders x WHERE x.message_id = m.id)
+             WHERE m.account_id = ? ORDER BY m.date`,
+        ),
+        downloadedAttachments: sqlite.prepare<
+            [string],
+            { id: string; messageId: string; filename: string; size: number }
+        >(
+            `SELECT t.id, t.message_id AS messageId, t.filename, t.size FROM mail_attachments t
+             JOIN mail_messages m ON m.id = t.message_id WHERE m.account_id = ? AND t.downloaded = 1`,
+        ),
+        signature: sqlite.prepare<{ a: string }, { n: number; maxSeq: number | null; downloaded: number }>(
+            `SELECT count(*) AS n, max(seq) AS maxSeq,
+                    (SELECT count(*) FROM mail_attachments t JOIN mail_messages x ON x.id = t.message_id
+                     WHERE x.account_id = @a AND t.downloaded = 1) AS downloaded
+             FROM mail_messages WHERE account_id = @a`,
+        ),
+        markDownloaded: sqlite.prepare<[string]>('UPDATE mail_attachments SET downloaded = 1 WHERE id = ?'),
     };
 
     function toMessage(row: MessageRow & { folderPath: string }): MailMessageRecord {
@@ -158,6 +203,7 @@ export function createMailCacheRepository(conn: Connection, now: () => Date) {
             if (query.folder) where.push('f.special_use = @folder');
             if (query.unreadOnly) where.push('m.unread = 1');
             if (query.since) where.push('m.date >= @since');
+            if (query.before) where.push('m.date < @before');
             const rows = sqlite
                 .prepare<Record<string, unknown>, MessageRow & { folderPath: string }>(
                     `${MESSAGE_SELECT} ${MESSAGE_FROM} WHERE ${where.join(' AND ')} ORDER BY m.date DESC LIMIT @limit`,
@@ -167,6 +213,7 @@ export function createMailCacheRepository(conn: Connection, now: () => Date) {
                     accountId: query.accountId,
                     folder: query.folder,
                     since: query.since,
+                    before: query.before,
                     limit: query.limit,
                 });
             return rows.map(toMessage);
@@ -231,9 +278,61 @@ export function createMailCacheRepository(conn: Connection, now: () => Date) {
                 updatedAt: row.updatedAt,
             };
         },
-        /** 发送成功后删除草稿。 */
+        /** 发送成功后、或用户删除时删除草稿。 */
         deleteDraft(id: string): void {
             q.draftDelete.run(id);
+        },
+        drafts(ownerId: string): MailDraft[] {
+            return q.draftIds.all(ownerId).map((r) => this.getDraft(ownerId, r.id)!);
+        },
+        /** 用户修改草稿:updated_at 随之更新,等待中的发送审批因此作废(ADR 0016 第 6 节)。 */
+        updateDraft(
+            ownerId: string,
+            id: string,
+            patch: {
+                to?: string[] | undefined;
+                cc?: string[] | undefined;
+                subject?: string | undefined;
+                text?: string | undefined;
+            },
+        ): MailDraft | null {
+            const d = this.getDraft(ownerId, id);
+            if (!d) return null;
+            q.draftUpdate.run({
+                id,
+                to: JSON.stringify(patch.to ?? d.to),
+                cc: JSON.stringify(patch.cc ?? d.cc),
+                subject: patch.subject ?? d.subject,
+                text: patch.text ?? d.text,
+                at: now().toISOString(),
+            });
+            return this.getDraft(ownerId, id);
+        },
+        /** 条目索引(mail 提供者)用:账户内全部邮件,每封取一个所在文件夹。 */
+        itemRows(accountId: string): MailItemRow[] {
+            const atts = new Map<string, MailItemRow['attachments']>();
+            for (const a of q.downloadedAttachments.all(accountId)) {
+                const list = atts.get(a.messageId) ?? [];
+                list.push({ id: a.id, filename: a.filename, size: a.size });
+                atts.set(a.messageId, list);
+            }
+            return q.itemRows.all(accountId).map((r) => ({
+                id: r.id,
+                folderId: r.folderId,
+                threadKey: r.threadKey,
+                subject: r.subject,
+                from: r.fromJson ? (JSON.parse(r.fromJson) as MailAddress) : null,
+                date: r.date,
+                attachments: atts.get(r.id) ?? [],
+            }));
+        },
+        /** 账户缓存的「指纹」:没有变化时提供者跳过整个账户。 */
+        signature(accountId: string): string {
+            const r = q.signature.get({ a: accountId })!;
+            return `${r.n}:${r.maxSeq ?? 0}:${r.downloaded}`;
+        },
+        markDownloaded(attachmentId: string): void {
+            q.markDownloaded.run(attachmentId);
         },
     };
 }

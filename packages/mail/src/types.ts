@@ -125,3 +125,12 @@ export interface SendOutput {
     /** APPEND 失败的原因(发送本身已经成功)。 */
     appendError: string | null;
 }
+
+/** 下载被缓存邮件的一个附件(用户点「加入知识库」时)。 */
+export interface DownloadInput {
+    imap: ImapConnectOptions;
+    folderPath: string;
+    uid: number;
+    part: string;
+    maxBytes: number;
+}

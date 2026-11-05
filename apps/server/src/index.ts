@@ -143,6 +143,7 @@ const app = createApp({
     items,
     mcp,
     mail,
+    kb,
     redact: (text) => redactor.redact(text),
 });
 

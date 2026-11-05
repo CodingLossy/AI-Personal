@@ -13,6 +13,7 @@ import { createTransport } from 'nodemailer';
 import MailComposer from 'nodemailer/lib/mail-composer/index.js';
 import { syncAccountWith } from './sync.js';
 import type {
+    DownloadInput,
     ImapConnectOptions,
     ImapSession,
     ParsedAttachment,
@@ -344,6 +345,26 @@ export async function sendMail(input: SendInput): Promise<SendOutput> {
         return result;
     } finally {
         if (imap) await imap.logout().catch(() => imap?.close());
+    }
+}
+
+/** 下载一个附件(只读打开文件夹;不会把邮件标为已读)。 */
+export async function downloadAttachment(input: DownloadInput): Promise<Uint8Array> {
+    const imap = await connectImap(input.imap);
+    try {
+        const lock = await imap.getMailboxLock(input.folderPath, { readOnly: true });
+        try {
+            const download = await imap.download(String(input.uid), input.part, {
+                uid: true,
+                maxBytes: input.maxBytes + 1,
+            });
+            if (!download.content) throw new Error('The attachment is no longer on the server.');
+            return new Uint8Array(await readStream(download.content, input.maxBytes));
+        } finally {
+            lock.release();
+        }
+    } finally {
+        await imap.logout().catch(() => imap.close());
     }
 }
 

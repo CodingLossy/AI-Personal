@@ -3,6 +3,7 @@
 
 import type { Item, ItemContent } from '@ai-personal/shared';
 import { useEffect, useState } from 'react';
+import { askAboutMail } from './MailPage.js';
 import { api, errorText } from './api.js';
 import { useI18n } from './i18n.js';
 
@@ -137,6 +138,17 @@ export function ItemsPage() {
                             <p className="small muted breadcrumb">
                                 {[...trail.map((a) => a.title), selected.title].join(' › ')}
                             </p>
+                            {selected.type === 'mail.message' ? (
+                                <button
+                                    type="button"
+                                    className="primary"
+                                    onClick={() =>
+                                        void askAboutMail(String((selected.meta as { messageId?: string }).messageId))
+                                    }
+                                >
+                                    {t('mail.ask')}
+                                </button>
+                            ) : null}
                             {content ? (
                                 <>
                                     <pre className="item-text">{content.content}</pre>

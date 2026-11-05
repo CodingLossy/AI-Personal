@@ -125,6 +125,28 @@ export function createKnowledgeBase(options: KnowledgeBaseOptions) {
             return promise;
         },
 
+        /**
+         * 把不在授权目录中的一段内容(例如邮件附件,ADR 0016)放进知识库:同样分块、检测并替换凭据、排队嵌入。
+         * 条目被软删除后,下一次 index() 会清理它的分块与向量。
+         */
+        indexContent(
+            ownerId: string,
+            input: { itemId: string; name: string; text: string; size: number; pdf?: boolean },
+        ): number {
+            const size = repos.settings.get(ownerId).knowledgeBase.chunkChars;
+            const chunks = guardCredentials(chunkText(input.text, { size, pdf: input.pdf ?? false }));
+            repos.kb.replace(
+                ownerId,
+                { itemId: input.itemId, mtime: null, size: input.size, chunkChars: size },
+                chunks,
+            );
+            repos.embeddings.removeItem(input.itemId, chunks.length);
+            for (const [i, chunk] of chunks.entries()) {
+                vectors?.enqueue(ownerId, input.itemId, i, embedText(input.name, chunk));
+            }
+            return chunks.length;
+        },
+
         /** 等待正在进行的索引结束(测试用)。 */
         async idle(): Promise<void> {
             while (running.size > 0) await Promise.all(running.values());

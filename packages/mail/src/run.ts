@@ -8,18 +8,21 @@ import { fork } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { MailConnectionTest } from '@ai-personal/shared';
-import type { ImapConnectOptions, SendInput, SendOutput, SyncInput, SyncOutput } from './types.js';
+import type { DownloadInput, ImapConnectOptions, SendInput, SendOutput, SyncInput, SyncOutput } from './types.js';
 
 export type MailJob =
     | { kind: 'sync'; input: SyncInput }
     | { kind: 'test'; imap: ImapConnectOptions; smtp: ImapConnectOptions }
-    | { kind: 'send'; input: SendInput };
+    | { kind: 'send'; input: SendInput }
+    | { kind: 'download'; input: DownloadInput };
 
 export type MailJobResult<J extends MailJob> = J extends { kind: 'sync' }
     ? SyncOutput
     : J extends { kind: 'send' }
       ? SendOutput
-      : MailConnectionTest;
+      : J extends { kind: 'download' }
+        ? Uint8Array
+        : MailConnectionTest;
 
 /** 执行邮件任务的函数;服务器默认用子进程,测试中注入内存实现。 */
 export type MailJobRunner = <J extends MailJob>(job: J) => Promise<MailJobResult<J>>;

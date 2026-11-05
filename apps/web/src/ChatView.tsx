@@ -38,7 +38,18 @@ export function ChatView({
     const { t } = useI18n();
     const [messages, setMessages] = useState<Message[]>([]);
     const [live, setLive] = useState<LiveTurn | null>(null);
-    const [input, setInput] = useState('');
+    // 从邮件「问 AI」进来时预填建议的第一句话(只含邮件 id)
+    const [input, setInput] = useState(() => {
+        if (!sessionId) return '';
+        try {
+            const key = 'aip.prefill.' + sessionId;
+            const text = sessionStorage.getItem(key) ?? '';
+            sessionStorage.removeItem(key);
+            return text;
+        } catch {
+            return '';
+        }
+    });
     const [error, setError] = useState<string | null>(null);
     /** 最近一轮用到的记忆;下一轮开始时清空。 */
     const [used, setUsed] = useState<{ runId: string | null; ids: string[] } | null>(null);

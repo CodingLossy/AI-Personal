@@ -17,6 +17,7 @@ import {
 import { MAIL_PRESETS } from '@ai-personal/mail';
 import type { SecretStore } from '@ai-personal/providers';
 import type { MailAccountRecord, Repositories } from '@ai-personal/storage';
+import type { ItemService, KnowledgeBase } from '@ai-personal/items';
 import { requireOwner } from '../auth/middleware.js';
 import { notFound } from '../errors.js';
 import type { MailService } from '../mail-setup.js';
@@ -112,7 +113,14 @@ const syncRoute = createRoute({
     responses: { 200: json(MailSyncResult, 'Result'), 404: problem('Not found'), ...authErrors },
 });
 
-export function mailRoutes(deps: { repos: Repositories; secrets: Pick<SecretStore, 'status'>; mail: MailService }) {
+export function mailRoutes(deps: {
+    repos: Repositories;
+    secrets: Pick<SecretStore, 'status'>;
+    mail: MailService;
+    /** 删除账户后清理条目与知识库(ADR 0016,M3 PR 4)。 */
+    items?: Pick<ItemService, 'sync'>;
+    kb?: Pick<KnowledgeBase, 'index'>;
+}) {
     const { repos, secrets, mail } = deps;
     const view = (a: MailAccountRecord): MailAccount => ({
         ...a,
@@ -140,11 +148,16 @@ export function mailRoutes(deps: { repos: Repositories; secrets: Pick<SecretStor
             load(ownerId, id);
             return c.json(view(repos.mail.update(ownerId, id, c.req.valid('json'))!), 200);
         })
-        .openapi(deleteRoute, (c) => {
+        .openapi(deleteRoute, async (c) => {
             const ownerId = requireOwner(c);
             const { id } = c.req.valid('param');
             if (!repos.mail.delete(ownerId, id)) throw notFound('Mail account');
             c.get('logger').info({ mailAccount: id }, 'mail account removed');
+            // 条目随之软删除;知识库接着清理这些条目的分块与向量
+            if (deps.items) {
+                await deps.items.sync(ownerId);
+                await deps.kb?.index(ownerId);
+            }
             return c.body(null, 204);
         })
         .openapi(foldersRoute, (c) => {

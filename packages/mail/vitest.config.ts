@@ -10,8 +10,16 @@ export default defineConfig({
             enabled: true,
             provider: 'v8',
             include: ['src/**/*.ts'],
-            // 网络与子进程部分(client / worker / run)需要真实服务器;tools 由服务器的邮件注入评测覆盖
-            exclude: ['src/**/*.test.ts', 'src/client.ts', 'src/worker.ts', 'src/run.ts', 'src/tools.ts'],
+            // 网络与子进程部分(client / worker / run)需要真实服务器;tools / items / attachments 由服务器的邮件测试与注入评测覆盖
+            exclude: [
+                'src/**/*.test.ts',
+                'src/client.ts',
+                'src/worker.ts',
+                'src/run.ts',
+                'src/tools.ts',
+                'src/items.ts',
+                'src/attachments.ts',
+            ],
             reporter: ['text-summary'],
             thresholds: { lines: 80, statements: 80 },
         },
