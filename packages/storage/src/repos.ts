@@ -27,6 +27,7 @@ import { createMcpServerRepository } from './mcp.js';
 import { createEmbeddingStore } from './embeddings.js';
 import { createKbRepository } from './kb.js';
 import { createMailRepository } from './mail.js';
+import { createMailCacheRepository } from './mail-cache.js';
 import { decodeCursor, encodeCursor, type Page } from './cursor.js';
 import type { Connection } from './db.js';
 import { newId } from './ids.js';
@@ -162,8 +163,8 @@ export function createRepositories(conn: Connection, options: RepoOptions = {}) 
 
     const sessionQ = {
         insert: sqlite.prepare(
-            `INSERT INTO sessions (id, owner_id, title, model_profile_id, created_at, updated_at)
-             VALUES (@id, @ownerId, @title, @modelProfileId, @createdAt, @updatedAt)`,
+            `INSERT INTO sessions (id, owner_id, title, model_profile_id, created_at, updated_at, untrusted_at)
+             VALUES (@id, @ownerId, @title, @modelProfileId, @createdAt, @updatedAt, @untrustedAt)`,
         ),
         get: sqlite.prepare<[string, string], SessionSelectRow>(`${sessionSelect} WHERE owner_id = ? AND id = ?`),
         first: sqlite.prepare<[string, number], SessionSelectRow>(
@@ -182,12 +183,23 @@ export function createRepositories(conn: Connection, options: RepoOptions = {}) 
         ),
         delete: sqlite.prepare('DELETE FROM sessions WHERE owner_id = ? AND id = ?'),
         touch: sqlite.prepare('UPDATE sessions SET last_message_at = ?, updated_at = ? WHERE id = ?'),
+        untrustedAt: sqlite.prepare<[string], { at: string | null }>(
+            'SELECT untrusted_at AS at FROM sessions WHERE id = ?',
+        ),
+        markUntrusted: sqlite.prepare<[string, string]>(
+            'UPDATE sessions SET untrusted_at = ? WHERE id = ? AND untrusted_at IS NULL',
+        ),
     };
 
     const sessions = {
         create(
             ownerId: string,
-            input: { title?: string | undefined; modelProfileId?: string | undefined } = {},
+            input: {
+                title?: string | undefined;
+                modelProfileId?: string | undefined;
+                /** 以外部内容(如一封邮件)为上下文新建的会话,一开始就视为读过不可信内容(ADR 0016 第 7 节)。 */
+                untrusted?: boolean | undefined;
+            } = {},
         ): Session {
             const at = iso();
             const id = newId(now());
@@ -198,6 +210,7 @@ export function createRepositories(conn: Connection, options: RepoOptions = {}) 
                 modelProfileId: input.modelProfileId ?? null,
                 createdAt: at,
                 updatedAt: at,
+                untrustedAt: input.untrusted ? at : null,
             });
             return sessions.get(ownerId, id)!;
         },
@@ -236,6 +249,13 @@ export function createRepositories(conn: Connection, options: RepoOptions = {}) 
         /** 删除会话;消息、运行、事件、摘要由外键级联删除。 */
         delete(ownerId: string, id: string): boolean {
             return sessionQ.delete.run(ownerId, id).changes > 0;
+        },
+        /** 会话第一次读到不可信内容的时间;之后整个会话都不再满足条件预授权(ADR 0016 第 7 节)。 */
+        untrustedAt(id: string): string | null {
+            return sessionQ.untrustedAt.get(id)?.at ?? null;
+        },
+        markUntrusted(id: string): void {
+            sessionQ.markUntrusted.run(iso(), id);
         },
     };
 
@@ -517,6 +537,7 @@ export function createRepositories(conn: Connection, options: RepoOptions = {}) 
         embeddings: createEmbeddingStore(conn, now),
         kb: createKbRepository(conn, now),
         mail: createMailRepository(conn, now),
+        mailCache: createMailCacheRepository(conn, now),
         ...createAuthRepositories(conn, now),
     };
 }

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 尹绪柏 (Theodore Yin)
 
 // 进行中的一轮对话:把一次运行的事件归并成可渲染的状态(ADR 0009 第 3 节)。纯函数,便于单测。
-import type { EventEnvelope, ProblemDetails, ToolRisk } from '@ai-personal/shared';
+import type { ApprovalWarning, EventEnvelope, ProblemDetails, ToolRisk } from '@ai-personal/shared';
 
 export interface LiveTool {
     callId: string;
@@ -12,6 +12,8 @@ export interface LiveTool {
     approval?: {
         summary: string;
         risk?: ToolRisk;
+        /** core 生成的审批警告(ADR 0016 第 8 节)。 */
+        warnings?: ApprovalWarning[];
         decision?: 'approve' | 'reject';
         reason?: 'user' | 'expired' | 'cancelled';
     };
@@ -53,7 +55,11 @@ export function applyEvent(turn: LiveTurn, envelope: EventEnvelope): LiveTurn {
         case 'approval-required':
             return updateTool(turn, e.callId, (t) => ({
                 ...t,
-                approval: { summary: e.summary, ...(e.risk ? { risk: e.risk } : {}) },
+                approval: {
+                    summary: e.summary,
+                    ...(e.risk ? { risk: e.risk } : {}),
+                    ...(e.warnings?.length ? { warnings: e.warnings } : {}),
+                },
             }));
         case 'approval-resolved':
             return updateTool(turn, e.callId, (t) => ({

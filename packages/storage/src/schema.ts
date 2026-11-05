@@ -38,6 +38,7 @@ export const TABLE_COLUMNS = {
         'created_at',
         'expires_at',
         'decided_at',
+        'warnings_json',
     ],
     fs_roots: ['id', 'owner_id', 'path', 'label', 'created_at', 'kb_enabled'],
     mcp_servers: [
@@ -293,6 +294,7 @@ export interface SessionRow {
     lastMessageAt: string | null;
     createdAt: string;
     updatedAt: string;
+    untrustedAt: string | null;
 }
 
 export interface MessageRow {

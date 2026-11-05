@@ -8,3 +8,4 @@ export type { MailJob, MailJobResult, MailJobRunner } from './run.js';
 export { DEFAULT_BATCH_SIZE, pickFolders, syncAccountWith } from './sync.js';
 export { normalizeSubject, ownThreadKey, referenceKey, subjectKey } from './thread.js';
 export type * from './types.js';
+export { createMailTools, MAX_READ_CHARS, startOfToday, type MailToolOptions } from './tools.js';

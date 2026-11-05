@@ -1,20 +1,24 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 尹绪柏 (Theodore Yin)
 
-// 真正的网络连接:IMAP(imapflow)、邮件解析(mailparser)、SMTP 连接测试(nodemailer)。
-// 这些库加起来约占 35 MiB 内存,只在同步 worker 中加载,主进程不导入本文件(ADR 0016 第 2 节)。
+// 真正的网络连接:IMAP(imapflow)、邮件解析(mailparser)、SMTP(nodemailer)。
+// 这些库加起来约占 35 MiB 内存,只在邮件子进程中加载,服务器进程不导入本文件(ADR 0016 第 2 节)。
+import { readFile, stat } from 'node:fs/promises';
 import { isIP } from 'node:net';
 import type { MailAddress, MailConnectionTest, MailServer } from '@ai-personal/shared';
 import { MailAddressString } from '@ai-personal/shared';
 import { ImapFlow, type FetchMessageObject, type MessageStructureObject } from 'imapflow';
 import { simpleParser, type AddressObject } from 'mailparser';
 import { createTransport } from 'nodemailer';
+import MailComposer from 'nodemailer/lib/mail-composer/index.js';
 import { syncAccountWith } from './sync.js';
 import type {
     ImapConnectOptions,
     ImapSession,
     ParsedAttachment,
     ParsedMessage,
+    SendInput,
+    SendOutput,
     SyncInput,
     SyncOutput,
 } from './types.js';
@@ -233,6 +237,116 @@ export async function syncAccount(input: SyncInput): Promise<SyncOutput> {
     return syncAccountWith(await openImapSession(input), input);
 }
 
+function smtpTransport(smtp: ImapConnectOptions) {
+    return createTransport({
+        host: smtp.server.host.replace(/^\[|\]$/g, ''),
+        port: smtp.server.port,
+        secure: smtp.server.security === 'tls',
+        // STARTTLS 必须成功,否则不发送凭据
+        requireTLS: smtp.server.security === 'starttls',
+        auth: { user: smtp.username, pass: smtp.password },
+        tls: tlsOptions(smtp.server, smtp.ca),
+        connectionTimeout: TIMEOUT_MS,
+        greetingTimeout: TIMEOUT_MS,
+        socketTimeout: TIMEOUT_MS,
+        logger: false,
+    });
+}
+
+/** 附件合计大小上限:多数邮箱的单封上限在 20–50 MB 之间。 */
+const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+const TOO_LARGE = 'The attachments are larger than 20 MB in total.';
+
+async function readStream(stream: AsyncIterable<unknown>, limit: number): Promise<Buffer> {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    for await (const chunk of stream) {
+        const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
+        size += buf.length;
+        if (size > limit) throw new Error(TOO_LARGE);
+        chunks.push(buf);
+    }
+    return Buffer.concat(chunks);
+}
+
+async function connectImap(options: ImapConnectOptions): Promise<ImapFlow> {
+    const client = newImapClient(options);
+    client.on('error', () => undefined);
+    await client.connect();
+    return client;
+}
+
+/**
+ * 发送一封邮件(ADR 0016 第 6 节):先组装原文,经 SMTP 发出,再按需 APPEND 到「已发送」并标为已读。
+ * APPEND 失败不影响发送结果,只在返回值中说明。
+ */
+export async function sendMail(input: SendInput): Promise<SendOutput> {
+    let budget = MAX_ATTACHMENT_BYTES;
+    const attachments: { filename: string; content: Buffer; contentType?: string }[] = [];
+    let imap: ImapFlow | null = null;
+    try {
+        for (const a of input.mailAttachments) {
+            imap ??= await connectImap(input.imap);
+            const lock = await imap.getMailboxLock(a.folderPath, { readOnly: true });
+            try {
+                const download = await imap.download(String(a.uid), a.part, { uid: true, maxBytes: budget + 1 });
+                if (!download.content) throw new Error(`The attachment ${a.filename} is no longer on the server.`);
+                const content = await readStream(download.content, budget);
+                budget -= content.length;
+                attachments.push({ filename: a.filename, content, contentType: a.contentType });
+            } finally {
+                lock.release();
+            }
+        }
+        for (const f of input.fileAttachments) {
+            if ((await stat(f.path)).size > budget) throw new Error(TOO_LARGE);
+            const content = await readFile(f.path);
+            budget -= content.length;
+            attachments.push({ filename: f.filename, content });
+        }
+        const node = new MailComposer({
+            from: input.from.name ? { name: input.from.name, address: input.from.address } : input.from.address,
+            to: input.to,
+            cc: input.cc,
+            subject: input.subject,
+            text: input.text,
+            ...(input.inReplyTo ? { inReplyTo: `<${input.inReplyTo}>` } : {}),
+            ...(input.references.length ? { references: input.references.map((r) => `<${r}>`) } : {}),
+            attachments,
+        }).compile();
+        const raw = await node.build();
+        const transport = smtpTransport(input.smtp);
+        let info: { accepted: unknown[]; rejected: unknown[] };
+        try {
+            info = await transport.sendMail({
+                envelope: { from: input.from.address, to: [...input.to, ...input.cc] },
+                raw,
+            });
+        } finally {
+            transport.close();
+        }
+        const result: SendOutput = {
+            messageId: node.messageId().replace(/^<|>$/g, ''),
+            accepted: info.accepted.map(String),
+            rejected: info.rejected.map(String),
+            appended: false,
+            appendError: null,
+        };
+        if (input.appendTo) {
+            try {
+                imap ??= await connectImap(input.imap);
+                await imap.append(input.appendTo, raw, ['\\Seen']);
+                result.appended = true;
+            } catch (error) {
+                result.appendError = describeError(error);
+            }
+        }
+        return result;
+    } finally {
+        if (imap) await imap.logout().catch(() => imap?.close());
+    }
+}
+
 /** 分别测试 IMAP 登录与 SMTP 登录;不发送任何邮件。 */
 export async function testConnection(imap: ImapConnectOptions, smtp: ImapConnectOptions): Promise<MailConnectionTest> {
     const result: MailConnectionTest = { imap: { ok: false, error: null }, smtp: { ok: false, error: null } };
@@ -244,18 +358,7 @@ export async function testConnection(imap: ImapConnectOptions, smtp: ImapConnect
     } catch (error) {
         result.imap.error = describeError(error);
     }
-    const transport = createTransport({
-        host: smtp.server.host.replace(/^\[|\]$/g, ''),
-        port: smtp.server.port,
-        secure: smtp.server.security === 'tls',
-        requireTLS: smtp.server.security === 'starttls',
-        auth: { user: smtp.username, pass: smtp.password },
-        tls: tlsOptions(smtp.server, smtp.ca),
-        connectionTimeout: TIMEOUT_MS,
-        greetingTimeout: TIMEOUT_MS,
-        socketTimeout: TIMEOUT_MS,
-        logger: false,
-    });
+    const transport = smtpTransport(smtp);
     try {
         await transport.verify();
         result.smtp.ok = true;

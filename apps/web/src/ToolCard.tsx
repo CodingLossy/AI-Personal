@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 尹绪柏 (Theodore Yin)
 
-import type { KbSearchOutput } from '@ai-personal/shared';
+import type { ApprovalWarning, KbSearchOutput } from '@ai-personal/shared';
 import { useState } from 'react';
 import { api, errorText } from './api.js';
 import { ApprovalActions } from './ApprovalActions.js';
@@ -16,15 +16,35 @@ export function show(value: unknown): string {
  * 工具调用卡片;等待审批时显示「批准」「拒绝」与「记住」选项(ADR 0009 第 4 节、ADR 0010 第 3 节)。
  * 摘要与入参来自模型,一律按纯文本显示。
  */
+/** 审批警告:有警告时整张卡片标红,逐条显示(文字由 core 生成)。 */
+export function ApprovalWarnings({ warnings }: { warnings?: ApprovalWarning[] | undefined }) {
+    const { t } = useI18n();
+    if (!warnings?.length) return null;
+    return (
+        <div className="approval-warnings" role="alert">
+            <strong>{t('approvals.warning')}</strong>
+            <ul>
+                {warnings.map((w) => (
+                    <li key={w.code}>{w.message}</li>
+                ))}
+            </ul>
+        </div>
+    );
+}
+
 export function ToolCard({ tool, live = false }: { tool: LiveTool; live?: boolean }) {
     const { t } = useI18n();
     const pending = live && tool.approval && !tool.approval.decision;
     const resolved = tool.approval?.decision;
 
     return (
-        <div className={`tool-card${pending ? ' pending' : ''}`} data-call-id={tool.callId}>
+        <div
+            className={`tool-card${pending ? ' pending' : ''}${pending && tool.approval?.warnings?.length ? ' warned' : ''}`}
+            data-call-id={tool.callId}
+        >
             <div className="tool-title">{t('tool.call', { name: tool.name })}</div>
             {tool.approval ? <p className="tool-summary">{tool.approval.summary}</p> : null}
+            {pending ? <ApprovalWarnings warnings={tool.approval?.warnings} /> : null}
             <details>
                 <summary className="small muted">input</summary>
                 <pre>{show(tool.input)}</pre>

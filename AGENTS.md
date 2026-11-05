@@ -8,17 +8,17 @@
 
 ## 常用命令
 
-| 命令                                                                  | 作用                                                  |
-| --------------------------------------------------------------------- | ----------------------------------------------------- |
-| `pnpm install`                                                        | 安装依赖(Node 24 LTS,最低 22.12;pnpm 10)              |
-| `pnpm dev`                                                            | 同时启动 server(127.0.0.1:8787)与 web(127.0.0.1:5173) |
-| `pnpm build`                                                          | 构建全部包(Turborepo)                                 |
-| `pnpm lint` / `pnpm typecheck` / `pnpm test`                          | ESLint / tsc / Vitest                                 |
-| `pnpm format` / `pnpm format:check`                                   | Prettier                                              |
-| `pnpm check:spdx` / `pnpm check:licenses` / `pnpm check:placeholders` | 许可证头、依赖白名单、占位符残留                      |
-| `pnpm --filter @ai-personal/server test`                              | 只跑某个包                                            |
-| `pnpm test:e2e` / `pnpm eval`                                         | Playwright 冒烟 / 记忆评测(召回率、过时率、错误率)    |
-| `docker compose -f docker/docker-compose.yml up --build`              | 本地容器运行                                          |
+| 命令                                                                  | 作用                                                             |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `pnpm install`                                                        | 安装依赖(Node 24 LTS 或更高;pnpm 10)                             |
+| `pnpm dev`                                                            | 同时启动 server(127.0.0.1:8787)与 web(127.0.0.1:5173)            |
+| `pnpm build`                                                          | 构建全部包(Turborepo)                                            |
+| `pnpm lint` / `pnpm typecheck` / `pnpm test`                          | ESLint / tsc / Vitest                                            |
+| `pnpm format` / `pnpm format:check`                                   | Prettier                                                         |
+| `pnpm check:spdx` / `pnpm check:licenses` / `pnpm check:placeholders` | 许可证头、依赖白名单、占位符残留                                 |
+| `pnpm --filter @ai-personal/server test`                              | 只跑某个包                                                       |
+| `pnpm test:e2e` / `pnpm eval`                                         | Playwright 冒烟 / 记忆评测(召回率、过时率、错误率)与邮件注入评测 |
+| `docker compose -f docker/docker-compose.yml up --build`              | 本地容器运行                                                     |
 
 以后加入:`pnpm --filter desktop tauri build`。
 

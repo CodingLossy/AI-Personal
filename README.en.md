@@ -22,7 +22,7 @@ AI-Personal contains **no** analytics or crash-reporting code. It only connects 
 
 ## Quick start
 
-Requires Node.js 24 LTS (minimum 22.12) and pnpm 10 (`corepack enable` provides it). With M1 you can stream chats from any OpenAI-compatible endpoint (including Ollama, DeepSeek and OpenRouter) and from the native Anthropic and Gemini APIs, resume a reply that is still streaming after a page refresh, have the assistant remember things you tell it (ordinary facts are saved at once and can be undone; sensitive ones or changes to your profile need your approval), and use it from the Web UI, the command line or curl.
+Requires Node.js 24 LTS or later and pnpm 10 (`corepack enable` provides it). With M1 you can stream chats from any OpenAI-compatible endpoint (including Ollama, DeepSeek and OpenRouter) and from the native Anthropic and Gemini APIs, resume a reply that is still streaming after a page refresh, have the assistant remember things you tell it (ordinary facts are saved at once and can be undone; sensitive ones or changes to your profile need your approval), and use it from the Web UI, the command line or curl.
 
 ### 1. Start
 

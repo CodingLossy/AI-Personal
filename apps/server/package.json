@@ -26,7 +26,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "openapi:export": "node scripts/export-openapi.mjs"
+    "openapi:export": "node scripts/export-openapi.mjs",
+    "eval": "vitest run src/mail-injection.eval.test.ts --reporter=verbose --coverage.enabled=false"
   },
   "dependencies": {
     "@ai-personal/agent": "workspace:*",

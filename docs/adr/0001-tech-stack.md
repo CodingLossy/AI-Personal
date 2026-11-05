@@ -12,17 +12,17 @@ AI-Personal 需要同时满足:可在 2GB 内存服务器常驻、桌面安装�
 
 采用 **TypeScript 单仓(pnpm workspaces + Turborepo)**:
 
-| 层          | 选型                                                                |
-| ----------- | ------------------------------------------------------------------- |
-| 运行时      | Node.js 24 LTS(最低 22.12),ESM only                                 |
-| 语言 / 校验 | TypeScript strict + zod(schema 前后端共享)                          |
-| HTTP / WS   | Hono(`@hono/node-server`)                                           |
-| Web UI      | React 19 + Vite(后续加 TanStack Router/Query、Tailwind、shadcn/ui)  |
-| 存储(M1 起) | SQLite(better-sqlite3,手写参数化 SQL,见 ADR 0005)+ sqlite-vec       |
-| LLM(M1 起)  | 自有 `ModelProvider` 接口;OpenAI 兼容端点用 fetch 自写(见 ADR 0006) |
-| MCP(M2 起)  | `@modelcontextprotocol/sdk`                                         |
-| 测试        | Vitest(之后加 Playwright、msw、录制回放)                            |
-| 桌面(M10)   | Tauri v2 壳 + Node sidecar                                          |
+| 层          | 选型                                                                                       |
+| ----------- | ------------------------------------------------------------------------------------------ |
+| 运行时      | Node.js 24 LTS 或更高(2026-11-05 起最低版本由 22.12 提高到 24:unpdf 需要 Node 24),ESM only |
+| 语言 / 校验 | TypeScript strict + zod(schema 前后端共享)                                                 |
+| HTTP / WS   | Hono(`@hono/node-server`)                                                                  |
+| Web UI      | React 19 + Vite(后续加 TanStack Router/Query、Tailwind、shadcn/ui)                         |
+| 存储(M1 起) | SQLite(better-sqlite3,手写参数化 SQL,见 ADR 0005)+ sqlite-vec                              |
+| LLM(M1 起)  | 自有 `ModelProvider` 接口;OpenAI 兼容端点用 fetch 自写(见 ADR 0006)                        |
+| MCP(M2 起)  | `@modelcontextprotocol/sdk`                                                                |
+| 测试        | Vitest(之后加 Playwright、msw、录制回放)                                                   |
+| 桌面(M10)   | Tauri v2 壳 + Node sidecar                                                                 |
 
 ## M0 中落地的具体取舍
 

@@ -22,7 +22,7 @@ AI-Personal **不包含任何**统计或崩溃上报代码。程序只会连接�
 
 ## 快速开始
 
-需要 Node.js 24 LTS(最低 22.12)与 pnpm 10(`corepack enable` 即可启用)。M1 可以:接入任意 OpenAI 兼容端点(含 Ollama / DeepSeek / OpenRouter)以及 Anthropic、Gemini 原生接口流式对话,刷新页面后续看进行中的回复,让助手记住你说的事(普通事实直接记住、可以撤销,涉及敏感信息或更替画像时需要你批准),并用 Web UI、命令行或 curl 使用。
+需要 Node.js 24 LTS 或更高版本与 pnpm 10(`corepack enable` 即可启用)。M1 可以:接入任意 OpenAI 兼容端点(含 Ollama / DeepSeek / OpenRouter)以及 Anthropic、Gemini 原生接口流式对话,刷新页面后续看进行中的回复,让助手记住你说的事(普通事实直接记住、可以撤销,涉及敏感信息或更替画像时需要你批准),并用 Web UI、命令行或 curl 使用。
 
 ### 1. 启动
 

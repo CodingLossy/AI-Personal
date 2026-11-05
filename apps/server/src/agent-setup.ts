@@ -14,6 +14,7 @@ import {
 import { type ModelProvider, selectProfile } from '@ai-personal/providers';
 import { MemorySearchInput } from '@ai-personal/shared';
 import type { MemoryStack } from './memory-setup.js';
+import { createMailTools, type MailToolOptions } from '@ai-personal/mail';
 import { z } from 'zod';
 import type { ModelProfileRecord, Repositories } from '@ai-personal/storage';
 import {
@@ -244,6 +245,22 @@ export function createCheapComplete(
     };
 }
 
+const MAX_MAIL_SUMMARY_CHARS = 4000;
+
+/** mail.summarize 用的补全:cheap 配置档,没有则用默认对话配置档(M3 方案业主决定 5)。 */
+export function createMailComplete(repos: Repositories, providerFor: (profile: ModelProfileRecord) => ModelProvider) {
+    const complete = createCheapComplete(repos, providerFor, MAX_MAIL_SUMMARY_CHARS);
+    return (ownerId: string, system: string, text: string, signal?: AbortSignal): Promise<string> =>
+        complete(
+            ownerId,
+            [
+                { role: 'system', content: system },
+                { role: 'user', content: text },
+            ],
+            signal ?? new AbortController().signal,
+        );
+}
+
 /** 用 cheap 配置档(没有则用 chat 配置档)压缩旧消息。 */
 export function createSummarizer(repos: Repositories, providerFor: (profile: ModelProfileRecord) => ModelProvider) {
     const complete = createCheapComplete(repos, providerFor, MAX_SUMMARY_CHARS);
@@ -282,13 +299,15 @@ export function createTurnExtractor(
     };
 }
 
-/** 组合根:记忆工具、内置工具 time / calc / web.fetch、文件工具 fs.*、条目工具 items.* 与 kb.search(ADR 0010–0015)。 */
+/** 组合根:记忆工具、内置工具 time / calc / web.fetch、文件工具 fs.*、条目工具 items.*、kb.search 与邮件工具 mail.*(ADR 0010–0016)。 */
 export function createToolRegistry(
     memory: Pick<MemoryStack, 'memory' | 'retriever' | 'digest'>,
     repos: Repositories,
     items: ItemService,
     kb: KnowledgeBase,
     builtin: BuiltinToolOptions = {},
+    /** 邮件工具(ADR 0016);不给时不注册。 */
+    mail?: Pick<MailToolOptions, 'runner' | 'secret' | 'complete' | 'now' | 'timeZone'>,
 ): ToolRegistry {
     // 每次调用都重新读取授权目录,撤销立即生效
     const roots = (ownerId: string) => repos.fsRoots.list(ownerId).map((r) => r.path);
@@ -299,5 +318,6 @@ export function createToolRegistry(
         ...createItemTools(repos, items),
         // 检索前按需同步条目(超过 60 秒才同步),新文件在后台进入知识库
         ...createKbTools(kb, (ownerId) => items.syncIfStale(ownerId)),
+        ...(mail ? createMailTools({ repos, roots, ...mail }) : []),
     );
 }
