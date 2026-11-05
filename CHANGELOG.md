@@ -4,7 +4,38 @@ All notable user-visible changes are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
-### M2 · Tools and files (in progress)
+### M3 · Mail (2026-11-05)
+
+#### Added
+
+- **Mail accounts** (ADR 0016, [#35](https://github.com/CodingLossy/AI-Personal/pull/35), [#36](https://github.com/CodingLossy/AI-Personal/pull/36)):
+  - add IMAP/SMTP accounts in Settings → Mail accounts, with presets for QQ, 163 and Gmail;
+  - passwords (app passwords or authorization codes) are only referenced as `env:NAME` or `file:NAME`, never stored in plaintext; only TLS and STARTTLS are supported, and OAuth is not;
+  - "Test connection" checks the IMAP and SMTP logins without sending anything.
+- **Sync** ([#36](https://github.com/CodingLossy/AI-Personal/pull/36)):
+  - Inbox and Sent are synced every 5 minutes by default, the first time only for the last 30 days (`initialSyncDays`);
+  - read state and deletions follow the server, and bodies are always read with `BODY.PEEK`, so AI-Personal never marks mail as read;
+  - the IMAP `ID` command is sent after login, which 163 requires;
+  - headers, a plain-text body and the attachment index are cached locally; attachments are only downloaded when you ask;
+  - sync runs in a short-lived child process, so idle memory stays the same when no account is configured.
+- **Mail tools** ([#37](https://github.com/CodingLossy/AI-Personal/pull/37)): `mail.list` (including "unread today"), `mail.search`, `mail.read` and `mail.summarize` (read, output marked as untrusted), `mail.draft` (saves a local draft) and `mail.send` (sends a saved draft only, needs your approval every time and can't be pre-authorized). If a draft changes while its approval is pending, the approval is cancelled. Sent mail is appended to the server's Sent folder.
+- **Session-level taint** ([#37](https://github.com/CodingLossy/AI-Personal/pull/37)): once any tool in a session returns untrusted content (web, files or mail), the whole session stays tainted, also after a restart. In a tainted session conditional pre-authorizations no longer apply (so `memory.write` always asks), and a recipient that neither you typed in the session nor is the sender of the mail being answered gets a red `recipient_untrusted` warning on the approval card.
+- `pnpm eval` also runs 14 mail injection cases.
+- **Mail in the knowledge map and the Web UI** ([#38](https://github.com/CodingLossy/AI-Personal/pull/38)):
+  - the knowledge map shows Mail → account → folder → thread → message; bodies are not added to the item search;
+  - a new Mail page lists messages by account and folder, shows plain-text bodies, can sync now, and lets you view, edit and delete drafts;
+  - "Add to knowledge base" on an attachment (`.md`, `.txt`, `.pdf`, `.docx`, `.xlsx`, up to 20 MB) indexes it for `kb.search` with the same credential guard as files; only the chunks are kept;
+  - "Ask AI" on a message opens a new session that is tainted from the start, with a suggested prompt that names only the message id.
+- New endpoints under `/mail`: presets, accounts (with folders, test and sync), messages, ask, attachments to the knowledge base, and drafts.
+
+#### Notes
+
+- "Today" means today in the server's time zone (the container's `TZ`), not necessarily yours.
+- Pre-authorizations you saved with "always" (such as `fs.write` for a folder) still apply in a tainted session. Set them with care.
+- Contacts and "people" items are moved to M5. Gmail/Outlook OAuth, IDLE, rich HTML rendering, scheduled digests, write actions such as marking as read, other folders and automatic attachment import are deferred.
+- The Docker image idles at 110 MiB in CI with no mail account (limit 120 MiB). The self-check is in [docs/milestones/M3-self-check.md](docs/milestones/M3-self-check.md).
+
+### M2 · Tools and files (2026-11-05)
 
 #### Added
 
@@ -103,7 +134,18 @@ All notable user-visible changes are listed here. The format follows [Keep a Cha
 
 ## 中文摘要(未发布)
 
-### M2 · 工具与文件(进行中)
+### M3 · 邮件(2026-11-05)
+
+- **邮件账户**(ADR 0016):在「设置 → 邮件账户」添加 IMAP/SMTP 账户,有 QQ、163、Gmail 预设;密码(应用专用密码或授权码)只能用 `env:NAME` 或 `file:NAME` 引用,不存明文;只支持 TLS 与 STARTTLS,不支持 OAuth;「测试连接」分别检查 IMAP 与 SMTP 登录,不发信。
+- **同步**:默认每 5 分钟同步收件箱与已发送,首次只拉最近 30 天(`initialSyncDays`);已读状态与删除跟随服务器,读取正文一律用 `BODY.PEEK`,不会把邮件标为已读;登录后发送 IMAP `ID` 命令(163 需要);本地缓存邮件头、纯文本正文与附件索引,附件只在你要求时下载;同步在短时的子进程中进行,没有配置账户时空闲内存不变。
+- **邮件工具**:`mail.list`(含「今天未读」)、`mail.search`、`mail.read`、`mail.summarize`(只读,输出标为不可信)、`mail.draft`(只存本地草稿)与 `mail.send`(只发送已保存的草稿,每次都要你批准,不能预授权)。审批等待期间草稿被修改时,原审批作废。发出的邮件会 APPEND 到服务器的「已发送」。
+- **会话级污染**:会话中只要有工具返回过不可信内容(网页、文件或邮件),整个会话就一直视为被污染,重启后仍然有效。被污染的会话中条件预授权全部失效(`memory.write` 一定要审批);收件人既不是你在本会话中亲自输入的地址、也不是被回复邮件的发件人时,审批卡片会标红显示 `recipient_untrusted` 警告。
+- `pnpm eval` 增加 14 条邮件注入用例。
+- **知识地图与 Web 中的邮件**:知识地图显示「邮件 → 账户 → 文件夹 → 会话串 → 邮件」,正文不进条目搜索;新的「邮件」页可按账户与文件夹浏览、立即同步、查看纯文本正文,以及查看、修改、删除草稿;附件(`.md`、`.txt`、`.pdf`、`.docx`、`.xlsx`,不超过 20 MB)可「加入知识库」,与文件相同地做凭据检测后供 `kb.search` 检索,只保存分块;单封邮件上的「问 AI」新建一个从一开始就视为被污染的会话,预填的提示只含邮件 id。
+- 新增 `/mail` 下的端点:预设、账户(含文件夹、测试与同步)、邮件、问 AI、附件加入知识库与草稿。
+- 说明:「今天」按服务器时区(容器的 `TZ`)计算;用「总是允许」保存的预授权(如某目录的 `fs.write`)在被污染的会话中仍然有效,请谨慎设置;联系人与「人物」推迟到 M5,Gmail/Outlook OAuth、IDLE、HTML 富渲染、定时摘要、标为已读等写操作、其他文件夹与附件自动入库推迟;无邮件账户时 CI 中 Docker 镜像空闲内存为 110 MiB(门禁 120 MiB)。自检报告见 [docs/milestones/M3-self-check.md](docs/milestones/M3-self-check.md)。
+
+### M2 · 工具与文件(2026-11-05)
 
 - **工具框架与审批**(ADR 0010):
   - 每个工具有风险级别(只读 / 写入 / 对外发送 / 危险),决定是直接执行还是需要你批准;
