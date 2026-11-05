@@ -62,6 +62,18 @@ import type {
     ToolInfo,
     ToolRisk,
     UpdateSessionRequest,
+    MailAccount,
+    MailAccountInput,
+    MailAccountPatch,
+    MailAskResult,
+    MailAttachmentKbResult,
+    MailConnectionTest,
+    MailDraft,
+    MailDraftPatch,
+    MailFolder,
+    MailMessage,
+    MailPreset,
+    MailSyncResult,
 } from '@ai-personal/shared';
 import { RunStream, type StreamOptions } from './run-stream.js';
 import { Transport, type TransportOptions } from './transport.js';
@@ -281,6 +293,55 @@ export function createClient(options: ClientOptions) {
             /** 选择这个目录里的文件是否进入知识库(ADR 0015 第 6 节)。 */
             update: (id: string, body: FsRootPatch) =>
                 t.json<FsRoot>(`/fs/roots/${enc(id)}`, { method: 'PATCH', body }),
+        },
+
+        mail: {
+            /** 邮件(ADR 0016)。账户只收密码引用(env: / file:),只能由用户增删改。 */
+            presets: () => t.json<{ items: MailPreset[] }>('/mail/presets'),
+            accounts: {
+                list: () => t.json<Page<MailAccount>>('/mail/accounts'),
+                get: (id: string) => t.json<MailAccount>(`/mail/accounts/${enc(id)}`),
+                add: (body: MailAccountInput) => t.json<MailAccount>('/mail/accounts', { method: 'POST', body }),
+                update: (id: string, body: MailAccountPatch) =>
+                    t.json<MailAccount>(`/mail/accounts/${enc(id)}`, { method: 'PATCH', body }),
+                remove: (id: string) => t.json<void>(`/mail/accounts/${enc(id)}`, { method: 'DELETE' }),
+                folders: (id: string) => t.json<{ items: MailFolder[] }>(`/mail/accounts/${enc(id)}/folders`),
+                test: (id: string) => t.json<MailConnectionTest>(`/mail/accounts/${enc(id)}/test`, { method: 'POST' }),
+                sync: (id: string) => t.json<MailSyncResult>(`/mail/accounts/${enc(id)}/sync`, { method: 'POST' }),
+            },
+            /** 邮件内容是不可信数据,只能按纯文本显示。 */
+            messages: (
+                query: {
+                    accountId?: string;
+                    folder?: 'inbox' | 'sent';
+                    unreadOnly?: boolean;
+                    before?: string;
+                    limit?: number;
+                } = {},
+            ) =>
+                t.json<{ items: MailMessage[] }>('/mail/messages', {
+                    query: {
+                        accountId: query.accountId,
+                        folder: query.folder,
+                        unreadOnly: query.unreadOnly === undefined ? undefined : String(query.unreadOnly),
+                        before: query.before,
+                        limit: query.limit,
+                    },
+                }),
+            message: (id: string) => t.json<MailMessage>(`/mail/messages/${enc(id)}`),
+            /** 以这封邮件为上下文新建会话(会话从一开始就视为读过不可信内容)。 */
+            ask: (id: string) => t.json<MailAskResult>(`/mail/messages/${enc(id)}/ask`, { method: 'POST' }),
+            addAttachmentToKnowledgeBase: (attachmentId: string) =>
+                t.json<MailAttachmentKbResult>(`/mail/attachments/${enc(attachmentId)}/knowledge-base`, {
+                    method: 'POST',
+                }),
+            drafts: {
+                list: () => t.json<{ items: MailDraft[] }>('/mail/drafts'),
+                get: (id: string) => t.json<MailDraft>(`/mail/drafts/${enc(id)}`),
+                update: (id: string, body: MailDraftPatch) =>
+                    t.json<MailDraft>(`/mail/drafts/${enc(id)}`, { method: 'PATCH', body }),
+                remove: (id: string) => t.json<void>(`/mail/drafts/${enc(id)}`, { method: 'DELETE' }),
+            },
         },
 
         embeddings: {

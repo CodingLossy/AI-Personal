@@ -128,6 +128,7 @@ export async function createTestServer(
     const app = createApp({
         mcp,
         mail,
+        kb,
         embeddings,
         config: {
             sourceUrl: 'https://github.com/CodingLossy/AI-Personal',

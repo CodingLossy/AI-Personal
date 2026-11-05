@@ -255,3 +255,41 @@ export const MailSyncResult = z.object({
     more: z.boolean(),
 });
 export type MailSyncResult = z.infer<typeof MailSyncResult>;
+
+/** GET /mail/messages 的查询参数(M3 PR 4,Web 的邮件列表)。按时间倒序;before 为上一页最后一封的时间。 */
+export const MailMessageQuery = z.object({
+    accountId: Id.optional(),
+    folder: z.enum(['inbox', 'sent']).optional(),
+    unreadOnly: z
+        .enum(['true', 'false'])
+        .transform((v) => v === 'true')
+        .optional(),
+    before: IsoDateTime.optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+export type MailMessageQuery = z.input<typeof MailMessageQuery>;
+
+/** PATCH /mail/drafts/{id}:用户在 Web 中修改草稿;修改后等待中的发送审批作废(ADR 0016 第 6 节)。 */
+export const MailDraftPatch = z.strictObject({
+    to: z.array(MailAddressString).min(1).max(100).optional(),
+    cc: z.array(MailAddressString).max(100).optional(),
+    subject: z.string().max(2000).optional(),
+    text: z.string().max(100_000).optional(),
+});
+export type MailDraftPatch = z.infer<typeof MailDraftPatch>;
+
+/**
+ * POST /mail/messages/{id}/ask 的结果:新建的会话(从一开始就视为读过不可信内容)与建议的第一句话。
+ * prompt 只含邮件 id,不含邮件里的任何文字,所以邮件中的地址不会被当成「主人给出的地址」(ADR 0016 第 7 节)。
+ */
+export const MailAskResult = z.object({ sessionId: Id, prompt: z.string() });
+export type MailAskResult = z.infer<typeof MailAskResult>;
+
+/** POST /mail/attachments/{id}/knowledge-base 的结果。 */
+export const MailAttachmentKbResult = z.object({
+    itemId: Id,
+    chunks: z.number().int().nonnegative(),
+    /** 解析失败等原因;为 null 表示成功。 */
+    error: z.string().max(300).nullable(),
+});
+export type MailAttachmentKbResult = z.infer<typeof MailAttachmentKbResult>;

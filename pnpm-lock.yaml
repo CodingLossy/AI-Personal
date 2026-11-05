@@ -214,6 +214,9 @@ importers:
 
   packages/mail:
     dependencies:
+      '@ai-personal/items':
+        specifier: workspace:*
+        version: link:../items
       '@ai-personal/shared':
         specifier: workspace:*
         version: link:../shared

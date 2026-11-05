@@ -20,6 +20,8 @@ export interface MailService {
     test(ownerId: string, accountId: string): Promise<MailConnectionTest>;
     /** 同步所有到期的账户(定时器调用;测试中直接调用)。 */
     tick(): Promise<void>;
+    /** 执行邮件任务(同步、发送、下载附件)的函数;默认是子进程。 */
+    readonly runner: MailJobRunner;
     start(): void;
     stop(): void;
 }
@@ -150,6 +152,7 @@ export function createMailService(options: MailServiceOptions): MailService {
     }
 
     return {
+        runner,
         sync,
         test,
         tick,

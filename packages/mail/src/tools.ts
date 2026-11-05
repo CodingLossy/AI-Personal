@@ -80,7 +80,7 @@ function line(m: MailMessageRecord): string {
     return `- id=${m.id} | ${m.date} | from ${addr(m.from)} | ${m.subject}${flags ? ` | ${flags}` : ''}\n  ${m.snippet}`;
 }
 
-function fullText(m: MailMessageRecord, limit: number): { text: string; truncated: boolean } {
+export function fullText(m: MailMessageRecord, limit: number): { text: string; truncated: boolean } {
     const body = m.text ?? '';
     const head = [
         `From: ${addr(m.from)}`,

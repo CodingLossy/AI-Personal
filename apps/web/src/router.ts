@@ -10,7 +10,8 @@ export type Route =
     | { name: 'settings' }
     | { name: 'memory' }
     | { name: 'audit' }
-    | { name: 'items' };
+    | { name: 'items' }
+    | { name: 'mail' };
 
 export function parseRoute(path: string): Route {
     const session = /^\/s\/([0-9A-Za-z]+)\/?$/.exec(path);
@@ -19,6 +20,7 @@ export function parseRoute(path: string): Route {
     if (path === '/memory') return { name: 'memory' };
     if (path === '/audit') return { name: 'audit' };
     if (path === '/items') return { name: 'items' };
+    if (path === '/mail') return { name: 'mail' };
     return { name: 'home' };
 }
 
