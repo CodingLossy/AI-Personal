@@ -169,3 +169,19 @@ CREATE INDEX idx_mem_lookup ON memory_facts(owner_id, status, mem_type);
 - **调度**(`apps/server/src/maintenance-setup.ts`):`croner`(MIT,import 后 heapUsed 约 +0.4 MiB)每天 03:30 运行,用服务器本地时间(1.0 设置中还没有用户时区);推迟时 10 分钟后重试,每天最多 12 次;启动 10 分钟后补跑一次(当天已完成的会跳过)。M6 的通用调度器上线后迁移过去。
 - **验收 ②**:「我搬到上海了」后旧值为 superseded,类型类别下默认可见的只有新值,旧值在 `meta.hidden = true` 的「历史版本」下,并能沿 `supersedes` 边(新 → 旧)找到;详情页与默认视图的隐藏由 PR 14 的 ItemProvider 与 UI 呈现。
 - **资源**:1 万条记忆上一次 decay + tier + expire 用时约 240 ms,额外 RSS 约 1 MB(目标 < 60 MB),测量在 `packages/memory/src/retrieve.perf.test.ts`。
+- **业主确认**(2026-11-05):先按服务器本地时间运行,时区设置以后随调度器一起做;满足归档条件时可以从 active 直接进 archive;启动后 10 分钟的补跑可以早于 03:30。
+
+### 5.8 反馈、记忆 API 与 Web(M2 PR 14)
+
+- **反馈**(`MemoryService.feedback`,补充设计第 6 节),写入 `memory_feedback` 并立即生效;同一条记忆、同一信号、同一 `runId` 只计一次(`ux_memfb_run`,重复时返回 `duplicate`):
+  - `helpful`:confidence + 0.05(上限 0.99)、`last_confirmed_at = now`、回到 active;
+  - `stale`:confidence − 0.15,`stale_count` 累计到 2 时 active 转 cold;
+  - `wrong`:有更正时按更替写入新值(`origin = user_explicit`,沿用原记录的类型、键与域;更正先过凭据检测与脱敏,含凭据时只记反馈不写入);没有更正时撤回(`retracted`、confidence × 0.3);
+  - `sensitive`:默认立即硬删除(补充设计中的「提高 sensitivity」选项留到以后)。
+- **冲突处理**:`kept_a` / `kept_b` 保留一条,另一条标为 superseded 并挂到历史版本,保留的一条回到 active(冲突期间用户已经明说了新值时,它也进历史版本);`both_valid` 两条都回到 active,单值键改为 multi;`dismissed` 只关闭冲突,两条仍是 conflicted。
+- **隔离区提升**:按 `origin = manual` 重新走写入路径(凭据检测、校验、脱敏照常;用户已经确认,不再按不可信来源检测指令);仍然不合法时保留原条目。
+- **REST**(`packages/shared` 增量契约:`MemoryFeedbackBody` / `MemoryFeedbackResult`、`MemorySource`、`MemoryConflict`、`ConflictResolveInput`、`QuarantinedMemory`):`POST /memory/{id}/feedback`、`GET /memory/{id}/sources`、`GET /memory/{id}/history`(新版本在前)、`GET /memory/conflicts`、`POST /memory/conflicts/{id}/resolve`、`GET /memory/quarantine`、`POST /memory/quarantine/{id}/promote`。`export` 推迟(M2 方案第 7 节)。
+- **审计**:`DELETE /memory/{id}` 写一条 `memory-undo` 审计(只记 id);`?reason=undo`(聊天中的「撤销」)摘要为 `Undid memory …`,否则(记忆页「删除」、即「忘记」)为 `Forgot memory …`。沿用已有的 `memory-undo` 动作,不改 `audit_log` 的 CHECK 约束。`memory.forget` 工具由工具审计记录。
+- **工具**:`memory.digest`(read);`memory.feedback`(write,条件预授权恒成立,本轮出现过外部内容时照常审批);`memory.forget`(write,`preauthorizable: false`,每次都要审批,不能「总是允许」)。`ToolDefinition` 新增 `preauthorizable?: false`。
+- **memory ItemProvider**(`apps/server/src/memory-provider.ts`):导航树在写入时维护,`sync` 不做事;`open` 返回陈述、可信度、出处与更替历史。记忆现在出现在 `GET /items/roots` 并可以浏览与打开;条目搜索、变更流与给模型的 `items.*` 工具仍然不含记忆(模型通过带渠道过滤的 `memory.*` 工具检索)。`GET /items/{id}/children` 新增 `includeHidden`(默认 false),默认不返回 `meta.hidden` 的子项(「历史版本」);过滤在分页之后,本页可能少于 `limit` 条。
+- **Web**:聊天中「本次用到的记忆」面板(来自 `memory-used` 事件,带有用 / 过时 / 错误(可填写更正)/ 不该记);记忆页增加历史、待确认的矛盾与隔离区。

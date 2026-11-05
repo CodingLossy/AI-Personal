@@ -13,6 +13,7 @@ import { createApp } from './app.js';
 import { createMcpControl } from './mcp-setup.js';
 import { createMemoryStack } from './memory-setup.js';
 import { startMaintenance } from './maintenance-setup.js';
+import { itemProviders } from './memory-provider.js';
 import { createEmbeddingService } from './embeddings.js';
 import { randomToken } from './auth/crypto.js';
 import { loadConfig } from './config.js';
@@ -65,6 +66,7 @@ const kb = createKnowledgeBase({
     onError: (err, { itemId }) => logger.warn({ err, itemId }, 'knowledge base indexing failed'),
 });
 const items = createItemService({
+    providers: itemProviders(),
     repos,
     onError: (err, { provider }) => logger.warn({ err, provider }, 'item provider sync failed'),
     onSynced: (ownerId) => void kb.index(ownerId),

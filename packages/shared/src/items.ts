@@ -46,8 +46,16 @@ export const ItemChildrenQuery = z.object({
     type: z.string().min(1).max(100).optional(),
     kind: ItemKind.optional(),
     sort: ItemSort.default('position'),
+    /**
+     * 是否包含 meta.hidden 为 true 的子项(例如记忆的「历史版本」类别);默认不包含。
+     * 自 M2 PR 14 起提供(ADR 0007 第 5.8 节)。
+     */
+    includeHidden: z
+        .enum(['true', 'false'])
+        .default('false')
+        .transform((v) => v === 'true'),
 });
-export type ItemChildrenQuery = z.infer<typeof ItemChildrenQuery>;
+export type ItemChildrenQuery = z.input<typeof ItemChildrenQuery>;
 
 export const ItemCounts = z.object({
     children: z.number().int().nonnegative(),

@@ -8,6 +8,8 @@ import {
     EventEnvelope,
     Memory,
     MemoryDigest,
+    MemoryFeedbackResult,
+    MemoryWriteResult,
     MemoryRetrieveResult,
     MemorySaveResult,
     MemorySearchResult,
@@ -302,6 +304,9 @@ describe('评测:真实 OpenAI 兼容 provider 回放 memory.save 往返', () =>
             'memory__save',
             'memory__retrieve',
             'memory__search',
+            'memory__digest',
+            'memory__feedback',
+            'memory__forget',
             'time',
             'calc',
             'web__fetch',
@@ -349,5 +354,106 @@ describe('越权', () => {
         expect(noCsrf.status).toBe(403);
         expect(ProblemDetails.parse(await noCsrf.json()).code).toBe('csrf_failed');
         expect(((await (await req('/api/v1/memory')).json()) as { items: unknown[] }).items).toEqual([]);
+    });
+});
+
+describe('记忆 API:反馈、出处、历史、冲突、隔离区与忘记(PR 14)', () => {
+    it('验收 ⑤:「错误」并填写更正后立即生效;helpful / stale;同一运行只计一次', async () => {
+        const { post, req } = await setup();
+        const write = async (body: unknown) =>
+            MemorySaveResult.parse(await (await post('/api/v1/memory', body)).json());
+        const old = await write({ text: '用户常住杭州', entityKey: 'user.location.city' });
+        const fb = async (id: string, body: unknown) =>
+            MemoryFeedbackResult.parse(await (await post(`/api/v1/memory/${id}/feedback`, body)).json());
+
+        const corrected = await fb(old.id!, { signal: 'wrong', correction: '用户常住上海' });
+        expect(corrected.outcome).toBe('corrected');
+        const list = (await (await req('/api/v1/memory')).json()) as { items: Memory[] };
+        expect(list.items.map((m) => m.text)).toEqual(['用户常住上海']);
+        const history = (await (await req(`/api/v1/memory/${corrected.id}/history`)).json()) as { items: Memory[] };
+        expect(history.items.map((m) => [m.text, m.status])).toEqual([
+            ['用户常住上海', 'active'],
+            ['用户常住杭州', 'superseded'],
+        ]);
+
+        const tea = await write({ text: '用户喜欢喝龙井' });
+        expect((await fb(tea.id!, { signal: 'helpful', runId: tea.id })).outcome).toBe('applied');
+        expect((await fb(tea.id!, { signal: 'helpful', runId: tea.id })).outcome).toBe('duplicate');
+        expect((await fb(tea.id!, { signal: 'stale' })).outcome).toBe('applied');
+        const after = Memory.parse(await (await req(`/api/v1/memory/${tea.id}`)).json());
+        expect(after.confidence).toBeCloseTo(0.8); // 0.9 + 0.05 - 0.15
+        expect((await post(`/api/v1/memory/01M00000000000000000000000/feedback`, { signal: 'helpful' })).status).toBe(
+            404,
+        );
+    });
+
+    it('验收 ⑦:「忘记」后 FTS 与来源清空,审计中有记录(只记 id);撤销记为 undo', async () => {
+        const { post, req } = await setup();
+        const saved = MemorySaveResult.parse(
+            await (await post('/api/v1/memory', { text: '用户养了一只叫 Mochi 的猫' })).json(),
+        );
+        expect((await req(`/api/v1/memory/${saved.id}/sources`)).status).toBe(200);
+        expect((await req(`/api/v1/memory/${saved.id}`, { method: 'DELETE' })).status).toBe(204);
+        const found = MemorySearchResult.parse(await (await post('/api/v1/memory/search', { query: 'Mochi' })).json());
+        expect(found.items).toEqual([]);
+        expect(s.repos.memories.sources(s.repos.owners.ids()[0]!, saved.id!)).toEqual([]);
+
+        const undone = MemorySaveResult.parse(
+            await (await post('/api/v1/memory', { text: '用户今天心情不错' })).json(),
+        );
+        expect((await req(`/api/v1/memory/${undone.id}?reason=undo`, { method: 'DELETE' })).status).toBe(204);
+        const audit = (await (await req('/api/v1/audit?limit=10')).json()) as {
+            items: { action: string; summary: string }[];
+        };
+        const entries = audit.items.filter((a) => a.action === 'memory-undo').map((a) => a.summary);
+        expect(entries).toEqual([`Undid memory ${undone.id}`, `Forgot memory ${saved.id}`]);
+        expect(JSON.stringify(audit)).not.toContain('Mochi');
+    });
+
+    it('冲突列表与处理;隔离区查看与提升;默认视图隐藏「历史版本」', async () => {
+        const { post, req } = await setup();
+        const ownerId = s.repos.owners.ids()[0]!;
+        // 用户明说 + 抽取的矛盾值 → 冲突
+        await post('/api/v1/memory', { text: '用户是后端工程师', entityKey: 'user.role' });
+        const memory = (await import('@ai-personal/memory')).createMemoryService(s.repos);
+        memory.write(ownerId, { text: '用户是产品经理', entityKey: 'user.role' }, { origin: 'extracted' });
+        const conflicts = (await (await req('/api/v1/memory/conflicts')).json()) as {
+            items: { id: string; a: Memory; b: Memory }[];
+        };
+        expect(conflicts.items).toHaveLength(1);
+        const c = conflicts.items[0]!;
+        expect((await post(`/api/v1/memory/conflicts/${c.id}/resolve`, { resolution: 'kept_a' })).status).toBe(204);
+        expect((await post(`/api/v1/memory/conflicts/${c.id}/resolve`, { resolution: 'kept_a' })).status).toBe(409);
+        expect(Memory.parse(await (await req(`/api/v1/memory/${c.a.id}`)).json()).status).toBe('active');
+        expect(Memory.parse(await (await req(`/api/v1/memory/${c.b.id}`)).json()).status).toBe('superseded');
+
+        memory.write(
+            ownerId,
+            { text: '用户下周去北京出差', memType: 'episodic' },
+            { origin: 'extracted', proposeOnly: true },
+        );
+        const q = (await (await req('/api/v1/memory/quarantine')).json()) as {
+            items: { id: string; reason: string }[];
+        };
+        expect(q.items.map((e) => e.reason)).toEqual(['untrusted_source']);
+        const promoted = MemoryWriteResult.parse(
+            await (await post(`/api/v1/memory/quarantine/${q.items[0]!.id}/promote`)).json(),
+        );
+        expect(promoted.outcome).toBe('created');
+        expect(((await (await req('/api/v1/memory/quarantine')).json()) as { items: unknown[] }).items).toEqual([]);
+
+        // 知识地图:「工作 → 事实」下默认看不到「历史版本」,includeHidden=true 时能看到
+        const group = s.repos.items.bySource(ownerId, 'memory', 'memory:work:semantic')!;
+        const visible = (await (await req(`/api/v1/items/${group.id}/children`)).json()) as {
+            items: { title: string }[];
+        };
+        expect(visible.items.map((i) => i.title)).toEqual(['用户是后端工程师']);
+        const all = (await (await req(`/api/v1/items/${group.id}/children?includeHidden=true`)).json()) as {
+            items: { title: string }[];
+        };
+        expect(all.items.map((i) => i.title)).toContain('历史版本');
+        const opened = (await (await req(`/api/v1/items/${c.a.id}/content`)).json()) as { content: string };
+        expect(opened.content).toContain('用户是后端工程师');
+        expect(opened.content).toContain('更替历史');
     });
 });

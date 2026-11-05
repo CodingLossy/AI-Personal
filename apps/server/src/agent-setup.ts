@@ -77,7 +77,7 @@ function summarizeWrite(input: unknown): string {
  * memory.retrieve(memory.search 是它的别名)是 read,直接执行(ADR 0010):有查询时走三路召回并返回带可信度说明的
  * 条目;查询为空时列出最近的 active 记忆(ADR 0007 第 5.6 节)。
  */
-export function createMemoryTools(stack: Pick<MemoryStack, 'memory' | 'retriever'>): ToolDefinition[] {
+export function createMemoryTools(stack: Pick<MemoryStack, 'memory' | 'retriever' | 'digest'>): ToolDefinition[] {
     const { memory, retriever } = stack;
     const retrieve = (name: string, description: string): ToolDefinition => ({
         name,
@@ -157,6 +157,68 @@ export function createMemoryTools(stack: Pick<MemoryStack, 'memory' | 'retriever
         write('memory.save', `${description} Alias of memory.write.`),
         retrieve('memory.retrieve', RETRIEVE_DESCRIPTION),
         retrieve('memory.search', `${RETRIEVE_DESCRIPTION} Alias of memory.retrieve.`),
+        {
+            name: 'memory.digest',
+            description:
+                'Read the short summary of what is remembered about the user (pinned memories, profile facts, ' +
+                'accepted decisions and open conflicts). It is already added at the start of each session.',
+            parameters: { type: 'object', properties: {}, additionalProperties: false },
+            risk: 'read',
+            summarize: () => 'Read the memory digest',
+            execute: (_input, ctx) => Promise.resolve(stack.digest.get(ctx.ownerId)),
+        },
+        {
+            name: 'memory.feedback',
+            description:
+                'Record feedback on a memory you used: helpful, stale (out of date), wrong (with an optional ' +
+                'correction) or sensitive (should not be kept; this deletes it). Only use it when the user says so.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    id: { type: 'string', description: 'The memory id (m:… in the memory block, without "m:").' },
+                    signal: { type: 'string', enum: ['helpful', 'stale', 'wrong', 'sensitive'] },
+                    correction: { type: 'string', description: 'For "wrong": the corrected fact in one sentence.' },
+                },
+                required: ['id', 'signal'],
+                additionalProperties: false,
+            },
+            risk: 'write',
+            // 预授权(补充设计第 8 节);本轮出现过外部内容时条件不成立,照常审批
+            autoApproveWhen: () => true,
+            summarize: (input) => {
+                const { signal, correction } = (input ?? {}) as { signal?: unknown; correction?: unknown };
+                const fix = typeof correction === 'string' ? `: ${redactSensitive(correction).text.slice(0, 200)}` : '';
+                return `Memory feedback (${String(signal)})${detectCredential(fix) ? '' : fix}`;
+            },
+            execute: (input, ctx) => {
+                const fields = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
+                const result = memory.feedback(ctx.ownerId, { ...fields, runId: ctx.runId } as never);
+                if (!result) throw new Error('memory not found');
+                return Promise.resolve(result);
+            },
+        },
+        {
+            name: 'memory.forget',
+            description:
+                'Permanently delete one memory and everything derived from it. The user must approve every time.',
+            parameters: {
+                type: 'object',
+                properties: { id: { type: 'string', description: 'The memory id.' } },
+                required: ['id'],
+                additionalProperties: false,
+            },
+            risk: 'write',
+            preauthorizable: false,
+            summarize: (input) => {
+                const id = (input as { id?: unknown } | null)?.id;
+                return `Forget memory ${typeof id === 'string' ? id : '(invalid)'}`;
+            },
+            execute: (input, ctx) => {
+                const id = (input as { id?: unknown } | null)?.id;
+                if (typeof id !== 'string' || !memory.forget(ctx.ownerId, id)) throw new Error('memory not found');
+                return Promise.resolve({ forgotten: id });
+            },
+        },
     ];
 }
 
@@ -222,7 +284,7 @@ export function createTurnExtractor(
 
 /** 组合根:记忆工具、内置工具 time / calc / web.fetch、文件工具 fs.*、条目工具 items.* 与 kb.search(ADR 0010–0015)。 */
 export function createToolRegistry(
-    memory: Pick<MemoryStack, 'memory' | 'retriever'>,
+    memory: Pick<MemoryStack, 'memory' | 'retriever' | 'digest'>,
     repos: Repositories,
     items: ItemService,
     kb: KnowledgeBase,

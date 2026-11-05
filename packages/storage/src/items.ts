@@ -136,7 +136,7 @@ export function createItemRepository(conn: Connection, now: () => Date) {
         ),
         roots: sqlite.prepare<[string], Row>(
             `SELECT ${COLUMNS} FROM items i
-             WHERE i.owner_id = ? AND i.kind = 'category' AND i.deleted_at IS NULL AND i.source <> 'memory'
+             WHERE i.owner_id = ? AND i.kind = 'category' AND i.deleted_at IS NULL
                AND NOT EXISTS (SELECT 1 FROM item_edges e WHERE e.child_id = i.id AND e.primary_edge = 1)
              ORDER BY i.title, i.id`,
         ),

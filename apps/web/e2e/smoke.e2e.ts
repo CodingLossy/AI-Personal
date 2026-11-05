@@ -194,11 +194,26 @@ test('初始化、配置档、流式中刷新、审批与记忆管理', async ({
     await page.getByRole('button', { name: '批准' }).click();
     await expect(page.locator('.message.assistant').last()).toContainText('好的,已更新。');
 
-    // 记忆页:只看到新值;编辑、删除
+    // 反馈(验收 ⑤):问到上海时,「本次用到的记忆」里出现这条;点「错误」并填写更正,立即生效
+    enqueue('deepseek-chat-stream');
+    await composer.fill('我是不是住在上海');
+    await composer.press('Enter');
+    const used = page.getByTestId('used-memories');
+    await used.locator('summary').click();
+    await expect(used).toContainText('用户搬到了上海');
+    await used.getByRole('button', { name: '错误' }).click();
+    await used.getByRole('textbox', { name: '正确的内容' }).fill('用户住在苏州');
+    await used.getByRole('button', { name: '保存' }).click();
+    await expect(used).toContainText('已更正');
+
+    // 记忆页:只看到更正后的值,历史中能看到更替链;编辑、忘记(验收 ⑦)
     await page.getByRole('link', { name: '记忆' }).click();
     const item = page.locator('.memory');
     await expect(item).toHaveCount(1);
-    await expect(item).toContainText('用户搬到了上海');
+    await expect(item).toContainText('用户住在苏州');
+    await item.getByRole('button', { name: '历史' }).click();
+    await expect(page.getByTestId('memory-history')).toContainText('用户搬到了上海 · superseded');
+    await expect(page.getByTestId('memory-history')).toContainText('用户常住杭州 · superseded');
     await item.getByRole('button', { name: '编辑' }).click();
     await item.getByRole('textbox').fill('用户常住杭州西湖区');
     await item.getByRole('button', { name: '保存' }).click();
@@ -206,9 +221,10 @@ test('初始化、配置档、流式中刷新、审批与记忆管理', async ({
     await page.locator('.memory').getByRole('button', { name: '删除' }).click();
     await expect(page.getByText('还没有记忆。')).toBeVisible();
 
-    // 审计页:两次条件预授权写入、拒绝、批准与新增预授权都有记录
+    // 审计页:两次条件预授权写入、撤销、拒绝、批准、新增预授权与忘记都有记录
     await page.getByRole('link', { name: '审计' }).click();
-    await expect(page.locator('.audit-table tbody tr')).toHaveCount(5);
+    await expect(page.locator('.audit-table tbody tr')).toHaveCount(7);
+    await expect(page.locator('.audit-table')).toContainText('撤销记忆');
     await expect(page.locator('.audit-table')).toContainText('已拒绝');
     await expect(page.locator('.audit-table')).toContainText('新增预授权');
 

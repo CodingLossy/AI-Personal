@@ -38,6 +38,8 @@ export interface ToolDefinition {
     risk: ToolRisk;
     /** 只能比级别默认值更严:'required' 让 read 工具也需审批(例如 web.fetch)。 */
     approval?: 'required';
+    /** 为 false 时不允许预授权,每次都要审批(例如 memory.forget)。 */
+    preauthorizable?: false;
     source?: 'builtin' | 'mcp';
     /** MCP 工具所属的服务器名。 */
     server?: string;

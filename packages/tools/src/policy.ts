@@ -33,7 +33,7 @@ export function isEnabled(tool: ToolDefinition, options: PolicyOptions = {}): bo
 }
 
 export function isPreauthorizable(tool: ToolDefinition): boolean {
-    return !NEVER_PREAUTHORIZED.includes(tool.risk);
+    return !NEVER_PREAUTHORIZED.includes(tool.risk) && tool.preauthorizable !== false;
 }
 
 /** API 中显示的默认审批方式(不考虑预授权与条件)。 */
@@ -133,7 +133,11 @@ export function prepareRemember(
 
 /** 校验批准时的 remember;返回错误说明,合法时返回 null(ADR 0010 第 3 节)。 */
 export function checkRemember(tool: ToolDefinition, remember: PreauthRemember): string | null {
-    if (!isPreauthorizable(tool)) return `${tool.risk} tools cannot be pre-authorized`;
+    if (!isPreauthorizable(tool)) {
+        return tool.preauthorizable === false
+            ? `the tool ${tool.name} needs approval every time`
+            : `${tool.risk} tools cannot be pre-authorized`;
+    }
     if (tool.requireConstraint && !remember.constraint?.[tool.requireConstraint]) {
         return `the tool ${tool.name} can only be pre-authorized with a ${tool.requireConstraint} constraint`;
     }
