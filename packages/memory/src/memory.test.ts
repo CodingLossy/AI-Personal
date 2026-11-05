@@ -57,6 +57,16 @@ describe('MemoryService', () => {
             reason: 'credential',
         });
         expect(repos.memories.list(ownerId, 10)).toEqual([]);
+        // 验收 ③:全文搜索也找不到
+        expect(service.search(ownerId, { query: 'sk-proj' }).items).toEqual([]);
+    });
+
+    it('敏感片段在落库前脱敏,原文搜不到', () => {
+        const service = createMemoryService(repos);
+        const r = service.save(ownerId, { text: '用户的手机号是 13812345678' }, 'user_explicit');
+        const saved = repos.memories.get(ownerId, r.id!);
+        expect(saved).toMatchObject({ text: '用户的手机号是 [手机号 ****5678]', sensitivity: 2 });
+        expect(service.search(ownerId, { query: '13812345678' }).items).toEqual([]);
     });
 
     it('user.* 默认单值,第二次写入更替旧值;检索返回当前值', () => {

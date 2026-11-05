@@ -11,7 +11,8 @@ import {
     type Memory,
 } from '@ai-personal/shared';
 import type { Repositories } from '@ai-personal/storage';
-import { detectCredential } from './secrets.js';
+import { detectCredential, detectCredentialIn } from './secrets.js';
+import { redactSensitive, redactSensitiveIn } from './sensitive.js';
 
 /** 初始置信度:用户明说的高,模型从对话中提取的低(《记忆模块补充设计》第 3 节)。 */
 const INITIAL_CONFIDENCE: Record<Memory['origin'], number> = {
@@ -50,18 +51,21 @@ export function createMemoryService(repos: Repositories): MemoryService {
     return {
         save(ownerId, rawInput, origin) {
             const input = MemorySaveInputSchema.parse(rawInput);
-            if (detectCredential(input.text) || (input.value && detectCredential(JSON.stringify(input.value)))) {
+            if (detectCredential(input.text) || detectCredentialIn(input.value)) {
                 return { outcome: 'refused', reason: 'credential' };
             }
+            // 敏感片段在落库前替换,原文不进入记忆表、FTS 与向量
+            const text = redactSensitive(input.text);
+            const value = input.value ? redactSensitiveIn(input.value) : null;
             const result = repos.memories.save(ownerId, {
-                text: input.text,
+                text: text.text,
                 memType: input.memType,
                 subtype: input.subtype ?? null,
                 entityKey: input.entityKey ?? null,
                 cardinality: input.cardinality ?? defaultCardinality(input.entityKey),
-                value: input.value ?? null,
+                value: value?.value ?? null,
                 domain: input.domain ?? 'general',
-                sensitivity: 0,
+                sensitivity: Math.max(text.sensitivity, value?.sensitivity ?? 0),
                 confidence: INITIAL_CONFIDENCE[origin],
                 origin,
                 ...(input.source ? { source: input.source } : {}),
