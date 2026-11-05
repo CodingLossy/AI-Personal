@@ -61,6 +61,8 @@ M1 只有一个最小审批管道:`AgentTool.requiresApproval` 是布尔值,待�
 
 M1 的 `memory.save` 在 M2 中成为 `memory.write` 的别名,遵循同一策略。
 
+> **修订(M3,ADR 0016 第 7 节)**:「读过不可信内容」改为按会话判断。会话中只要有一次工具返回了不可信内容,之后所有轮次的条件预授权都失效,`memory.write` 一定需要审批;状态记录在会话上,重启后仍然有效。M2 的实现只在一轮内判断。
+
 ### 5. 审批请求的生命周期
 
 - 需要审批时,core 在 `approval_requests` 表中写入一条 `pending` 记录(调用 id、运行、会话、工具、级别、摘要、脱敏后的入参、创建时间、过期时间),然后发出 `approval-required` 事件,运行状态变为 `waiting_approval`。

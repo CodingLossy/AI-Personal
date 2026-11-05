@@ -10,8 +10,11 @@ import {
     MailDraftInput,
     MailMessage,
     MailSecretRef,
+    MailSendInput,
     MailServer,
 } from './mail.js';
+import { AgentEvent } from './events.js';
+import { ApprovalRequest, ApprovalWarningCode } from './tools.js';
 
 const ID = '01M00000000000000000000000';
 
@@ -29,6 +32,7 @@ describe('邮件契约', () => {
         expect(MailAccountInput.parse(account)).toMatchObject({
             initialSyncDays: 30,
             syncIntervalMinutes: 5,
+            appendToSent: true,
             enabled: true,
         });
         expect(MailAccountInput.safeParse({ ...account, password: 'hunter22' }).success).toBe(false);
@@ -102,6 +106,57 @@ describe('邮件契约', () => {
             MailDraftInput.parse({ accountId: ID, to: ['a@example.com'], subject: 'Re: 周报', text: '收到' }).cc,
         ).toEqual([]);
         expect(MailDraftInput.safeParse({ accountId: ID, to: [], subject: 'x', text: 'y' }).success).toBe(false);
+    });
+
+    it('草稿附件只能来自被回复邮件或授权目录;mail.send 只接受草稿 id', () => {
+        const base = { accountId: ID, to: ['a@example.com'], subject: 'Re: 周报', text: '见附件' };
+        expect(
+            MailDraftInput.parse({
+                ...base,
+                attachments: [
+                    { kind: 'mail', attachmentId: ID },
+                    { kind: 'file', path: 'D:/Docs/周报.pdf' },
+                ],
+            }).attachments,
+        ).toHaveLength(2);
+        expect(MailDraftInput.parse(base).attachments).toEqual([]);
+        expect(
+            MailDraftInput.safeParse({ ...base, attachments: [{ kind: 'url', url: 'https://evil.example/x' }] })
+                .success,
+        ).toBe(false);
+        expect(MailDraftInput.safeParse({ ...base, inReplyTo: '<x@evil.example>' }).success).toBe(false);
+
+        expect(MailSendInput.parse({ draftId: ID })).toEqual({ draftId: ID });
+        expect(MailSendInput.safeParse({ draftId: ID, to: ['x@evil.example'] }).success).toBe(false);
+        expect(MailSendInput.safeParse({ to: ['x@evil.example'], subject: 'x', text: 'y' }).success).toBe(false);
+    });
+
+    it('审批警告:approval-required 事件与 ApprovalRequest 的可选 warnings,旧数据照常解析', () => {
+        const warning = { code: ApprovalWarningCode.enum.recipient_untrusted, message: '收件人不在你的消息中' };
+        const event = { type: 'approval-required', runId: ID, callId: 'c1', summary: '发送邮件' };
+        expect(AgentEvent.parse(event)).not.toHaveProperty('warnings');
+        expect(AgentEvent.parse({ ...event, warnings: [warning] })).toMatchObject({ warnings: [warning] });
+
+        const request = {
+            callId: 'c1',
+            runId: ID,
+            sessionId: ID,
+            toolName: 'mail.send',
+            risk: 'external',
+            summary: '发送邮件',
+            input: { draftId: ID },
+            status: 'pending',
+            preauthorizable: false,
+            createdAt: '2026-11-05T00:00:00.000Z',
+            expiresAt: '2026-11-05T00:30:00.000Z',
+            decidedAt: null,
+        };
+        expect(ApprovalRequest.parse(request).warnings).toBeUndefined();
+        expect(ApprovalRequest.parse({ ...request, warnings: [warning] }).warnings).toEqual([warning]);
+        // 新代码不会让旧的解析失败:code 是字符串。
+        expect(
+            ApprovalRequest.safeParse({ ...request, warnings: [{ code: 'future_code', message: 'x' }] }).success,
+        ).toBe(true);
     });
 
     it('items.source 新增 mail', () => {

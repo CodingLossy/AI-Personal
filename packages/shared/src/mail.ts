@@ -61,6 +61,8 @@ const MailAccountFields = z.strictObject({
     initialSyncDays: z.number().int().min(1).max(365).default(30),
     /** 定时拉取的间隔(分钟,默认 5)。 */
     syncIntervalMinutes: z.number().int().min(5).max(1440).default(5),
+    /** 发送成功后 APPEND 到服务器的「已发送」(ADR 0016 第 6 节);Gmail 会自动保存,预设为 false。 */
+    appendToSent: z.boolean().default(true),
     enabled: z.boolean().default(true),
 });
 
@@ -77,6 +79,7 @@ export const MailAccountPatch = z.strictObject({
     smtp: MailServer.optional(),
     initialSyncDays: z.number().int().min(1).max(365).optional(),
     syncIntervalMinutes: z.number().int().min(5).max(1440).optional(),
+    appendToSent: z.boolean().optional(),
     enabled: z.boolean().optional(),
 });
 export type MailAccountPatch = z.infer<typeof MailAccountPatch>;
@@ -108,6 +111,11 @@ export const MailFolder = z.object({
     uidValidity: z.number().int().nonnegative().nullable(),
     /** 已同步的最大 UID。 */
     lastUid: z.number().int().nonnegative(),
+    /** 服务器支持 CONDSTORE 时记录的 HIGHESTMODSEQ,用于只取变化的 FLAGS;不支持时为 null(ADR 0016 第 2 节)。 */
+    highestModseq: z
+        .string()
+        .regex(/^\d{1,20}$/)
+        .nullable(),
     messageCount: z.number().int().nonnegative(),
     unreadCount: z.number().int().nonnegative(),
     lastSyncedAt: IsoDateTime.nullable(),
@@ -142,7 +150,7 @@ export const MailMessage = z.object({
     subject: z.string().max(2000),
     /** 邮件头中的日期;解析不了时取收到的时间。 */
     date: IsoDateTime,
-    /** 只在本地记录,不回写服务器(ADR 0016 第 2 节)。 */
+    /** 与服务器的 \Seen 同步;读取用 BODY.PEEK,不会把服务器上的邮件标为已读(ADR 0016 第 2 节)。 */
     unread: z.boolean(),
     /** 纯文本正文(HTML 转纯文本);列表接口中可以省略。 */
     text: z.string().optional(),
@@ -165,6 +173,23 @@ export const MailThread = z.object({
 });
 export type MailThread = z.infer<typeof MailThread>;
 
+/**
+ * 草稿附件的来源(ADR 0016 第 6 节):只能是被回复邮件的附件,或授权目录中的文件(按 fs.read 的路径规则校验)。
+ */
+export const MailDraftAttachment = z.discriminatedUnion('kind', [
+    z.strictObject({ kind: z.literal('mail'), attachmentId: Id }),
+    z.strictObject({ kind: z.literal('file'), path: z.string().min(1).max(4096) }),
+]);
+export type MailDraftAttachment = z.infer<typeof MailDraftAttachment>;
+
+/** 草稿中的附件:来源加上审批卡片要显示的文件名与大小。 */
+export const MailDraftAttachmentInfo = z.object({
+    source: MailDraftAttachment,
+    filename: z.string().max(500),
+    size: z.number().int().nonnegative(),
+});
+export type MailDraftAttachmentInfo = z.infer<typeof MailDraftAttachmentInfo>;
+
 /** 本地草稿(ADR 0016 第 6 节):只保存在本地,发送一定要审批。 */
 export const MailDraftInput = z.strictObject({
     accountId: Id,
@@ -172,8 +197,9 @@ export const MailDraftInput = z.strictObject({
     cc: z.array(MailAddressString).max(100).default([]),
     subject: z.string().max(2000),
     text: z.string().max(100_000),
-    /** 回复哪一封邮件;发送时据此设置 In-Reply-To / References。 */
+    /** 回复哪一封邮件;In-Reply-To / References 由 core 据此设置,不由模型提供。 */
     replyToMessageId: Id.optional(),
+    attachments: z.array(MailDraftAttachment).max(20).default([]),
 });
 export type MailDraftInput = z.input<typeof MailDraftInput>;
 
@@ -185,7 +211,17 @@ export const MailDraft = z.object({
     subject: z.string(),
     text: z.string(),
     replyToMessageId: Id.nullable(),
+    attachments: z.array(MailDraftAttachmentInfo),
     createdAt: IsoDateTime,
     updatedAt: IsoDateTime,
 });
 export type MailDraft = z.infer<typeof MailDraft>;
+
+/**
+ * mail.send 的输入:只有草稿 id(ADR 0016 第 6 节,业主决定 4)。发送的就是保存着的那份草稿,
+ * 未知字段(如 to、text)一律拒绝,模型不能在发送时改动内容。
+ */
+export const MailSendInput = z.strictObject({
+    draftId: Id,
+});
+export type MailSendInput = z.infer<typeof MailSendInput>;
