@@ -18,6 +18,7 @@ export type {
     OpenConflict,
     StoredDigest,
 } from './memory-read.js';
+export type { JobState, MaintenanceRow, MemoryMaintenanceRepository } from './memory-maintenance.js';
 export type {
     MemoryConflict,
     NewMemory,

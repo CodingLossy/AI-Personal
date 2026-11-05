@@ -17,6 +17,7 @@ import { z } from 'zod';
 import { createAuthRepositories } from './auth.js';
 import { createMemoryRepository, createSummaryRepository } from './memory.js';
 import { createMemoryReadRepository } from './memory-read.js';
+import { createMemoryMaintenanceRepository } from './memory-maintenance.js';
 import { createProfileRepository } from './profiles.js';
 import { createSettingsRepository } from './settings.js';
 import { createToolRepositories } from './tools.js';
@@ -505,6 +506,7 @@ export function createRepositories(conn: Connection, options: RepoOptions = {}) 
         modelProfiles: createProfileRepository(conn, now),
         memories: createMemoryRepository(conn, now, itemRepo),
         memoryRead: createMemoryReadRepository(conn, now),
+        memoryMaintenance: createMemoryMaintenanceRepository(conn),
         summaries: createSummaryRepository(conn, now),
         settings: createSettingsRepository(conn, now),
         ...createToolRepositories(conn, now),

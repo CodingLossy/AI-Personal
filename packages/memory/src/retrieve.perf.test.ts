@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 尹绪柏 (Theodore Yin)
 
-// 性能测量(M2 方案 PR 12 验收):1 万条记忆时 retrieve(不含嵌入往返)P95 < 80 ms,digest 读取 < 5 ms。
+// 性能测量:1 万条记忆时 retrieve(不含嵌入往返)P95 < 80 ms,digest 读取 < 5 ms(M2 方案 PR 12);
+// 维护任务的额外 RSS < 60 MB(PR 13)。
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -9,6 +10,7 @@ import { performance } from 'node:perf_hooks';
 import { type Connection, createRepositories, openStorage } from '@ai-personal/storage';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDigestBuilder } from './digest.js';
+import { createMaintenanceRunner } from './maintenance.js';
 import { createRetriever } from './retrieve.js';
 
 const N = 10_000;
@@ -97,5 +99,25 @@ describe(`性能:${N} 条记忆`, () => {
         );
         expect(retrieveP95).toBeLessThan(80);
         expect(digestP95).toBeLessThan(5);
+    }, 120_000);
+
+    // 维护任务的额外 RSS(M2 方案 PR 13 验收):分批执行,峰值应远小于 60 MB 的目标
+    it('维护任务在 1 万条记忆上的额外 RSS < 60 MB', async () => {
+        const later = new Date(Date.now() + 400 * 86_400_000);
+        const repos = createRepositories(conn, { now: () => later });
+        const runner = createMaintenanceRunner({ repos, now: () => later, removeVectors: () => undefined });
+        globalThis.gc?.();
+        const before = process.memoryUsage().rss;
+        let peak = before;
+        const sampler = setInterval(() => (peak = Math.max(peak, process.memoryUsage().rss)), 5);
+        const start = performance.now();
+        const result = await runner.runAll(ownerId);
+        const ms = performance.now() - start;
+        clearInterval(sampler);
+        peak = Math.max(peak, process.memoryUsage().rss);
+        const extraMb = (peak - before) / 1048576;
+        console.log(`[perf] maintenance on ${N} memories: ${ms.toFixed(0)} ms, extra RSS ${extraMb.toFixed(1)} MB`);
+        expect(Object.values(result)).toEqual(['done', 'done', 'done']);
+        expect(extraMb).toBeLessThan(60);
     }, 120_000);
 });

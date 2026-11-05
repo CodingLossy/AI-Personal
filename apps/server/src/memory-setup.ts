@@ -42,6 +42,8 @@ export function createMemoryStack(
     const retriever = createRetriever({
         repos,
         vectors: async (ownerId, query, k) => await embeddings.search(ownerId, query, k),
+        // 归档时删掉了向量;被访问回到 active 后重新嵌入
+        onReactivated: (ownerId, id, text) => embeddings.enqueue(ownerId, id, 0, text),
     });
     return {
         memory,

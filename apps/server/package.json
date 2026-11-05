@@ -38,6 +38,7 @@
     "@ai-personal/tools": "workspace:*",
     "@hono/node-server": "^2.1.6",
     "@hono/zod-openapi": "^1.6.3",
+    "croner": "^11.0.0",
     "hono": "^4.13.16",
     "pino": "^10.4.0",
     "ws": "^8.22.1",
