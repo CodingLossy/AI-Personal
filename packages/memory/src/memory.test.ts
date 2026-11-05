@@ -80,13 +80,11 @@ describe('MemoryService', () => {
         expect(found.items[0]).toMatchObject({ origin: 'user_explicit', confidence: 0.9, cardinality: 'single' });
     });
 
-    it('recall:检索没有字面命中时回退为最近更新的 active 记忆', () => {
+    it('recall:有查询但没有命中时不再回退为最近的记忆(只有空查询才列出最近的)', () => {
         const service = createMemoryService(repos);
         service.save(ownerId, { text: '用户住在深圳。' }, 'user_explicit');
-        expect(service.search(ownerId, { query: '居住 城市 住址' }).items).toEqual([]);
-        const recalled = service.recall(ownerId, { query: '居住 城市 住址' });
-        expect(recalled.items.map((m) => m.text)).toEqual(['用户住在深圳。']);
-        expect(recalled.items[0]).toMatchObject({ status: 'active', score: 0 });
+        expect(service.recall(ownerId, { query: '居住 城市 住址' }).items).toEqual([]);
+        expect(service.recall(ownerId, { query: '' }).items[0]).toMatchObject({ text: '用户住在深圳。', score: 0 });
     });
 
     it('recall:query 为空时列出最近的 active 记忆,最多 20 条,不含已更替的', () => {

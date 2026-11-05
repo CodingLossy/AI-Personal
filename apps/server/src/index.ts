@@ -6,12 +6,12 @@ import type { Server } from 'node:http';
 import { serve } from '@hono/node-server';
 import { EventBus, RunManager } from '@ai-personal/agent';
 import { createItemService, createKnowledgeBase } from '@ai-personal/items';
-import { createMemoryService } from '@ai-personal/memory';
 import { createProvider, Redactor, SecretStore } from '@ai-personal/providers';
 import { createRepositories, openStorage } from '@ai-personal/storage';
 import { createSummarizer, createToolRegistry, createTurnExtractor } from './agent-setup.js';
 import { createApp } from './app.js';
 import { createMcpControl } from './mcp-setup.js';
+import { createMemoryStack } from './memory-setup.js';
 import { createEmbeddingService } from './embeddings.js';
 import { randomToken } from './auth/crypto.js';
 import { loadConfig } from './config.js';
@@ -45,7 +45,6 @@ if (repos.owners.count() === 0) {
 
 const providerDeps = { secrets, redactor };
 const providerFor = (profile: Parameters<typeof createProvider>[0]) => createProvider(profile, providerDeps);
-const memory = createMemoryService(repos);
 // 嵌入队列:有 embed 配置档或已有向量表时才加载 sqlite-vec(ADR 0014)
 const embeddings = createEmbeddingService({
     repos,
@@ -54,6 +53,11 @@ const embeddings = createEmbeddingService({
     onError: (err) => logger.warn({ err }, 'embedding failed'),
 });
 // 知识库:条目同步之后在后台分块并入队嵌入(ADR 0015)
+// 记忆:写入后排队嵌入并防抖重建 digest;每轮注入 digest 与记忆块(ADR 0007 第 5.6 节)
+const memoryStack = createMemoryStack(repos, embeddings, {
+    onError: (err) => logger.warn({ err }, 'memory digest rebuild failed'),
+});
+const { memory } = memoryStack;
 const kb = createKnowledgeBase({
     repos,
     vectors: embeddings,
@@ -69,7 +73,8 @@ const runs = new RunManager({
     repos,
     bus,
     providerFor,
-    tools: createToolRegistry(memory, repos, items, kb),
+    tools: createToolRegistry(memoryStack, repos, items, kb),
+    memoryContext: (input) => memoryStack.context(input),
     redact: (text) => redactor.redact(text),
     summarize: createSummarizer(repos, providerFor),
     // 设置中「memory.write 每次都要审批」关闭条件预授权(ADR 0010 第 4 节)
@@ -101,7 +106,7 @@ const app = createApp({
     providerDeps,
     bus,
     runs,
-    memory,
+    memory: memoryStack,
     items,
     mcp,
     redact: (text) => redactor.redact(text),
@@ -117,6 +122,7 @@ function shutdown(signal: string): void {
     websockets.close();
     mcp.closeAll();
     embeddings.stop();
+    memoryStack.stop();
     server.close(() => {
         conn.close();
         process.exit(0);

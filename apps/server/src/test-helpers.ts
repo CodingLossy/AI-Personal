@@ -7,13 +7,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Writable } from 'node:stream';
 import { EventBus, RunManager } from '@ai-personal/agent';
-import { createMemoryService } from '@ai-personal/memory';
 import { createProvider, type ModelProvider, Redactor, SecretStore } from '@ai-personal/providers';
 import { createRepositories, openStorage, type Repositories } from '@ai-personal/storage';
 import type { WebFetchOptions } from '@ai-personal/tools';
 import { createItemService, createKnowledgeBase, type KnowledgeBase } from '@ai-personal/items';
 import { createSummarizer, createToolRegistry } from './agent-setup.js';
 import { createApp, type AppDeps } from './app.js';
+import { createMemoryStack } from './memory-setup.js';
 import { createMcpControl } from './mcp-setup.js';
 import { createEmbeddingService, type EmbeddingService } from './embeddings.js';
 import { FailureLimiter } from './auth/rate-limit.js';
@@ -77,8 +77,8 @@ export async function createTestServer(
     };
     const providerFor = (profile: Parameters<typeof createProvider>[0]) =>
         options.provider ?? createProvider(profile, providerDeps);
-    const memory = createMemoryService(repos);
     const embeddings = createEmbeddingService({ repos, providerFor, redact: (text) => redactor.redact(text) });
+    const memory = createMemoryStack(repos, embeddings);
     const kb = createKnowledgeBase({ repos, vectors: embeddings });
     const items = createItemService({ repos, onSynced: (ownerId) => void kb.index(ownerId) });
     const bus = new EventBus();
@@ -91,6 +91,7 @@ export async function createTestServer(
         redact: (text) => redactor.redact(text),
         ...(options.approvalTimeoutMs ? { approvalTimeoutMs: options.approvalTimeoutMs } : {}),
         summarize: createSummarizer(repos, providerFor),
+        memoryContext: (input) => memory.context(input),
         // 审批流程的测试默认关闭条件预授权;conditionalApprovals 时与生产一致,按设置决定
         disableConditional: options.conditionalApprovals
             ? (ownerId) => repos.settings.get(ownerId).memory.alwaysApprove
@@ -133,6 +134,7 @@ export async function createTestServer(
             mcp.closeAll();
             await kb.idle();
             embeddings.stop();
+            memory.stop();
             await embeddings.idle();
             await runs.idle();
             conn.close();

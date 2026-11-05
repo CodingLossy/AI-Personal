@@ -101,6 +101,7 @@ describe('/api/v1/tools、/approvals、/preauthorizations、/audit', () => {
             ['items.roots', 'read', 'auto', true, null],
             ['items.search', 'read', 'auto', true, null],
             ['kb.search', 'read', 'auto', true, null],
+            ['memory.retrieve', 'read', 'auto', true, null],
             ['memory.save', 'write', 'required', true, null],
             ['memory.search', 'read', 'auto', true, null],
             ['memory.write', 'write', 'required', true, null],

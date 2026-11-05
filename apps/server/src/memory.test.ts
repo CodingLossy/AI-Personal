@@ -7,6 +7,8 @@ import type { ChatChunk, ChatRequest, ModelProvider } from '@ai-personal/provide
 import {
     EventEnvelope,
     Memory,
+    MemoryDigest,
+    MemoryRetrieveResult,
     MemorySaveResult,
     MemorySearchResult,
     ProblemDetails,
@@ -195,6 +197,43 @@ describe('memory.save 审批流程(验收:记住我住杭州 → 新会话问我
     });
 });
 
+describe('每轮的记忆上下文(验收 ①:记住我住杭州 → 新会话问我住哪,带可信度说明)', () => {
+    it('第一轮注入 digest,之后按用户消息检索;发出 memory-used;/memory/retrieve 与 /memory/digest', async () => {
+        const { fake, post, req, newSession } = await setup();
+        const saved = MemorySaveResult.parse(
+            await (await post('/api/v1/memory', { text: '用户常住杭州', entityKey: 'user.location.city' })).json(),
+        );
+
+        const session = await newSession();
+        fake.steps.push(answer('你住在杭州。'));
+        const events = await readSse(
+            await post(`/api/v1/sessions/${session.id}/messages`, { text: '我住哪?' }),
+            () => undefined,
+        );
+        const used = events.find((e) => e.event.type === 'memory-used')!.event as { ids: string[] };
+        expect(used.ids).toEqual([saved.id]);
+        const system = fake.requests[0]!.messages.filter((m) => m.role === 'system').map((m) => m.content);
+        expect(system.some((c) => typeof c === 'string' && c.includes('用户常住杭州(可靠)'))).toBe(true);
+
+        // 第二轮不再注入 digest,按用户消息检索出带可信度说明的记忆块
+        fake.steps.push(answer('是的。'));
+        await readSse(
+            await post(`/api/v1/sessions/${session.id}/messages`, { text: '我还住在杭州吗?' }),
+            () => undefined,
+        );
+        const second = fake.requests[1]!.messages.filter((m) => m.role === 'system').map((m) => String(m.content));
+        expect(second.some((c) => c.includes(`[记忆 m:${saved.id} | 事实`) && c.includes('状态:可靠]'))).toBe(true);
+        expect(second.some((c) => c.includes('用户常住杭州(可靠)'))).toBe(false);
+
+        const retrieved = MemoryRetrieveResult.parse(
+            await (await post('/api/v1/memory/retrieve', { query: '杭州' })).json(),
+        );
+        expect(retrieved.items.map((i) => [i.id, i.qualifier])).toEqual([[saved.id, 'reliable']]);
+        const digest = MemoryDigest.parse(await (await req('/api/v1/memory/digest')).json());
+        expect(digest.ids).toEqual([saved.id]);
+    });
+});
+
 describe('memory.write 的条件预授权(业主决定 4)', () => {
     /** 运行一轮:模型调用一次 memory.write 再回答;返回是否弹出了审批(弹出时直接批准)和工具结果。 */
     async function runWrite(ctx: Awaited<ReturnType<typeof setup>>, input: unknown) {
@@ -261,6 +300,7 @@ describe('评测:真实 OpenAI 兼容 provider 回放 memory.save 往返', () =>
         expect(first.tools.map((t) => t.function.name)).toEqual([
             'memory__write',
             'memory__save',
+            'memory__retrieve',
             'memory__search',
             'time',
             'calc',

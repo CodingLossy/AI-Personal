@@ -4,11 +4,11 @@
 // 生成 OpenAPI 文档的静态副本(业主决定:/api/v1/openapi.json 需要鉴权,CI 另导出静态文件)。
 import { EventBus, RunManager } from '@ai-personal/agent';
 import { createItemService } from '@ai-personal/items';
-import { createMemoryService } from '@ai-personal/memory';
 import { Redactor, SecretStore } from '@ai-personal/providers';
 import { createRepositories, migrate, migrations, openDatabase } from '@ai-personal/storage';
 import { createApp } from './app.js';
 import { createLogger } from './log.js';
+import { createMemoryStack } from './memory-setup.js';
 import { SERVER_VERSION } from './version.js';
 
 /** 用内存数据库组装一个应用实例,只为读取路由定义;不发任何网络请求。 */
@@ -27,7 +27,7 @@ export async function buildOpenApiDocument(): Promise<unknown> {
             secrets,
             providerDeps: { secrets, redactor },
             bus,
-            memory: createMemoryService(repos),
+            memory: createMemoryStack(repos, { enqueue: () => undefined, search: () => Promise.resolve(null) }),
             items: createItemService({ repos }),
             runs: new RunManager({
                 repos,
