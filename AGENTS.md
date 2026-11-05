@@ -10,7 +10,7 @@
 
 | 命令                                                                  | 作用                                                  |
 | --------------------------------------------------------------------- | ----------------------------------------------------- |
-| `pnpm install`                                                        | 安装依赖(Node 24 LTS,最低 22.12;pnpm 10)              |
+| `pnpm install`                                                        | 安装依赖(Node 24 LTS 或更高;pnpm 10)                  |
 | `pnpm dev`                                                            | 同时启动 server(127.0.0.1:8787)与 web(127.0.0.1:5173) |
 | `pnpm build`                                                          | 构建全部包(Turborepo)                                 |
 | `pnpm lint` / `pnpm typecheck` / `pnpm test`                          | ESLint / tsc / Vitest                                 |

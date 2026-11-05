@@ -13,7 +13,7 @@ Pull requests without a signed CLA cannot be merged. The project does **not** ac
 
 ## 2. Development setup
 
-- Node.js 24 LTS (minimum 22.12) and pnpm 10 (`corepack enable`)
+- Node.js 24 LTS or later and pnpm 10 (`corepack enable`)
 - `pnpm install` to install dependencies; `pnpm dev` starts the core server (127.0.0.1:8787) and the Web UI (127.0.0.1:5173)
 
 | Command                                      | Purpose                                  |
