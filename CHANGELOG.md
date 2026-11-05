@@ -57,8 +57,14 @@ All notable user-visible changes are listed here. The format follows [Keep a Cha
   - memories appear in the knowledge map as Memory → domain → type; older versions are hidden by default.
 - New endpoints `POST /memory/{id}/feedback`, `GET /memory/{id}/sources`, `GET /memory/{id}/history`, `GET /memory/conflicts`, `POST /memory/conflicts/{id}/resolve`, `GET /memory/quarantine` and `POST /memory/quarantine/{id}/promote`; `GET /items/{id}/children` gains `includeHidden`. New tools `memory.digest`, `memory.feedback` and `memory.forget` (always needs approval).
 - Undoing a new memory and forgetting a memory are now recorded in the audit log (memory id only).
+- **Choose which folders go into the knowledge base** (ADR 0015 §6): each authorized folder has a "Use in knowledge base" switch in Settings (`PATCH /fs/roots/{id}`, `knowledgeBase`). It is off by default; turning it off removes that folder's chunks and vectors.
+- **Credentials are kept out of the knowledge base** (ADR 0015 §7): before a chunk is stored, API keys, tokens, passwords and similar secrets are replaced with "[已隐藏凭据]", and a chunk that still looks like a credential is dropped.
+- `pnpm eval` runs the memory evaluation set (32 Chinese cases for recall, superseding, conflicts, injection, credentials and stale labels) in replay mode and prints the recall, stale and error rates.
 
 #### Changed
+
+- **Upgrading**: after the migration no authorized folder is in the knowledge base, so existing chunks are removed at the next indexing until you switch the folders back on.
+- Chinese two-character recall no longer drops content words such as 「过敏」 or 「吉他」.
 
 - `memory.search` with a query no longer falls back to the 20 most recent memories when nothing matches; an empty query still lists them.
 - Approvals that were pending when the server restarted now expire instead of being lost silently.
@@ -141,6 +147,10 @@ All notable user-visible changes are listed here. The format follows [Keep a Cha
 - **记忆反馈与管理**(ADR 0007 第 5.8 节):回答之后,「本次用到的记忆」列出助手看到的记忆,可以点有用、过时、错误(可填写更正,立即替换)或不该记(删除);记忆页显示每条记忆的历史、待确认的矛盾(保留一条、两条都对或忽略)和隔离区(可以确认保存);记忆出现在知识地图「记忆 → 域 → 类型」中,旧版本默认隐藏。
 - 新端点 `POST /memory/{id}/feedback`、`GET /memory/{id}/sources`、`GET /memory/{id}/history`、`GET /memory/conflicts`、`POST /memory/conflicts/{id}/resolve`、`GET /memory/quarantine`、`POST /memory/quarantine/{id}/promote`;`GET /items/{id}/children` 新增 `includeHidden`。新工具 `memory.digest`、`memory.feedback` 与 `memory.forget`(每次都要审批)。
 - 撤销新记忆与「忘记」记忆现在都会写入审计日志(只记记忆 id)。
+- **按目录选择是否进入知识库**(ADR 0015 第 6 节):设置中每个授权目录都有「加入知识库」开关(`PATCH /fs/roots/{id}`,`knowledgeBase`),默认关闭;关闭后清理该目录的分块与向量。升级后所有目录默认不在知识库中,已有分块会在下一次索引时清理,需要重新勾选。
+- **凭据不进知识库**(ADR 0015 第 7 节):分块入库前,API key、令牌、密码等凭据替换为「[已隐藏凭据]」,替换后仍像凭据的块整块丢弃。
+- `pnpm eval` 运行记忆评测集(32 条中文用例,覆盖召回、更替、冲突、注入、凭据与过时说明),回放模式,输出召回率、过时率与错误率。
+- 中文二字词召回不再丢掉「过敏」「吉他」这类实词。
 - `memory.search` 带查询而没有命中时,不再回退为最近 20 条;空查询仍列出最近的记忆。
 - 服务器重启时尚未处理的审批请求会过期,不再悄悄丢失。
 

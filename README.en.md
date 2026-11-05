@@ -4,7 +4,7 @@
 
 An AI assistant that is truly your own: self-hostable, open source, bring-your-own-model (BYO LLM), local-first, **telemetry-free**, and pluggable (MCP is a first-class citizen).
 
-> Status: **M1 · chat core** (pre-release, not yet versioned). Streamed chat with your own models, memory and approvals, usable from the Web UI, the command line or curl. See [CHANGELOG.md](CHANGELOG.md) for changes and the development plan (Chinese) at [docs/plan/AI-Personal-开发计划.md](docs/plan/AI-Personal-开发计划.md).
+> Status: **M2 · tools, local files and memory** (pre-release, not yet versioned). On top of M1's streamed chat it adds tools with risk-based approvals (files, web, MCP), documents and a knowledge base from the folders you authorize, a knowledge map, and long-term memory that can be superseded, carries trust labels, and can be corrected or forgotten. Usable from the Web UI, the command line or curl. See [CHANGELOG.md](CHANGELOG.md) for changes and the development plan (Chinese) at [docs/plan/AI-Personal-开发计划.md](docs/plan/AI-Personal-开发计划.md).
 
 ## Features (planned)
 
@@ -13,6 +13,7 @@ An AI assistant that is truly your own: self-hostable, open source, bring-your-o
 - **Local files, email, voice, scheduled tasks**, with risk-graded tools; dangerous actions require confirmation by default
 - **Channels**: WeCom (企业微信) and WeChat in 1.0
 - **Knowledge map**: mail, documents, novels, people and more in one item index you can drill into level by level
+- **Long-term memory**: typed, superseded rather than overwritten, with sources; answers carry trust labels (reliable, possibly stale, conflicted, inferred); credentials are always refused and sensitive data is redacted before it is stored; you can mark a memory helpful, out of date, wrong or not to be kept, and forget it at any time
 - **Lightweight**: runs comfortably on a 2 GB server
 
 ## Telemetry-free
@@ -21,7 +22,7 @@ AI-Personal contains **no** analytics or crash-reporting code. It only connects 
 
 ## Quick start
 
-Requires Node.js 24 LTS (minimum 22.12) and pnpm 10 (`corepack enable` provides it). With M1 you can stream chats from any OpenAI-compatible endpoint (including Ollama, DeepSeek and OpenRouter) and from the native Anthropic and Gemini APIs, resume a reply that is still streaming after a page refresh, have the assistant remember things you tell it (saving a memory needs your approval), and use it from the Web UI, the command line or curl.
+Requires Node.js 24 LTS (minimum 22.12) and pnpm 10 (`corepack enable` provides it). With M1 you can stream chats from any OpenAI-compatible endpoint (including Ollama, DeepSeek and OpenRouter) and from the native Anthropic and Gemini APIs, resume a reply that is still streaming after a page refresh, have the assistant remember things you tell it (ordinary facts are saved at once and can be undone; sensitive ones or changes to your profile need your approval), and use it from the Web UI, the command line or curl.
 
 ### 1. Start
 
