@@ -16,6 +16,8 @@ import { createApp, type AppDeps } from './app.js';
 import { createMemoryStack } from './memory-setup.js';
 import { itemProviders } from './memory-provider.js';
 import { createMcpControl } from './mcp-setup.js';
+import { createMailService, type MailService } from './mail-setup.js';
+import type { MailJobRunner } from '@ai-personal/mail';
 import { createEmbeddingService, type EmbeddingService } from './embeddings.js';
 import { FailureLimiter } from './auth/rate-limit.js';
 import { createLogger } from './log.js';
@@ -25,6 +27,7 @@ export const TEST_SETUP_CODE = 'setup-code-123456';
 
 export interface TestServer {
     app: ReturnType<typeof createApp>;
+    mail: MailService;
     bus: EventBus;
     runs: RunManager;
     embeddings: EmbeddingService;
@@ -52,6 +55,8 @@ export interface TestServerOptions {
     webFetch?: WebFetchOptions;
     /** 打开 memory.write 的条件预授权(与生产一致);默认关闭,审批流程的测试每次都会弹审批。 */
     conditionalApprovals?: boolean;
+    /** 邮件任务的执行方式(测试中用内存实现代替 worker 与真实服务器)。 */
+    mailRunner?: MailJobRunner;
 }
 
 export async function createTestServer(
@@ -104,8 +109,15 @@ export async function createTestServer(
     });
     // MCP 子进程在 cleanup 时关闭
     const mcp = createMcpControl(runs.tools);
+    const mail = createMailService({
+        repos,
+        secrets,
+        redact: (text) => redactor.redact(text),
+        ...(options.mailRunner ? { runner: options.mailRunner } : {}),
+    });
     const app = createApp({
         mcp,
+        mail,
         embeddings,
         config: {
             sourceUrl: 'https://github.com/CodingLossy/AI-Personal',
@@ -128,6 +140,7 @@ export async function createTestServer(
     });
     return {
         app,
+        mail,
         bus,
         runs,
         embeddings,

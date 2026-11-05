@@ -11,6 +11,7 @@ import { createRepositories, openStorage } from '@ai-personal/storage';
 import { createSummarizer, createToolRegistry, createTurnExtractor } from './agent-setup.js';
 import { createApp } from './app.js';
 import { createMcpControl } from './mcp-setup.js';
+import { createMailService } from './mail-setup.js';
 import { createMemoryStack } from './memory-setup.js';
 import { startMaintenance } from './maintenance-setup.js';
 import { itemProviders } from './memory-provider.js';
@@ -108,6 +109,15 @@ for (const server of repos.mcpServers.allEnabled()) {
 
 embeddings.start(repos.owners.ids());
 
+// 邮件:每分钟检查到期的账户;同步在 worker 中进行,没有账户时不加载任何邮件库(ADR 0016 第 2 节)
+const mail = createMailService({
+    repos,
+    secrets,
+    redact: (text) => redactor.redact(text),
+    onError: (err, { accountId }) => logger.warn({ err, mailAccount: accountId }, 'mail sync failed'),
+});
+mail.start();
+
 const app = createApp({
     embeddings,
     config: { ...config, setupCode },
@@ -120,6 +130,7 @@ const app = createApp({
     memory: memoryStack,
     items,
     mcp,
+    mail,
     redact: (text) => redactor.redact(text),
 });
 
@@ -135,6 +146,7 @@ function shutdown(signal: string): void {
     embeddings.stop();
     memoryStack.stop();
     maintenance.stop();
+    mail.stop();
     server.close(() => {
         conn.close();
         process.exit(0);
