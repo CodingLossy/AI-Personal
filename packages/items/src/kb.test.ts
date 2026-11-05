@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 尹绪柏 (Theodore Yin)
 
-import { mkdtempSync, realpathSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createRepositories, openStorage } from '@ai-personal/storage';
@@ -14,6 +14,7 @@ import {
     createKnowledgeBase,
     embedText,
     formatResults,
+    guardCredentials,
     type KbVectors,
     MAX_CHUNKS_PER_FILE,
 } from './kb/index.js';
@@ -84,7 +85,7 @@ describe('知识库索引与检索', () => {
             writeFileSync(path.join(base, 'b.txt'), 'Office hours are 9 to 6.');
             writeFileSync(path.join(base, 'broken.pdf'), 'not a pdf');
             writeFileSync(path.join(base, 'skip.json'), '{}');
-            repos.fsRoots.create(ownerId, { path: base, label: 'docs' });
+            repos.fsRoots.create(ownerId, { path: base, label: 'docs', knowledgeBase: true });
 
             const queued: string[] = [];
             let vectorResult: { itemId: string; chunk: number }[] | null = null;
@@ -133,6 +134,50 @@ describe('知识库索引与检索', () => {
             await kb.idle();
             expect(repos.kb.counts(ownerId)).toEqual({ files: 2, chunks: 1 });
             expect(repos.kb.get(ownerId, aId, 0)).toBeNull();
+        } finally {
+            conn.close();
+            rmSync(dir, { recursive: true, force: true });
+            rmSync(base, { recursive: true, force: true });
+        }
+    });
+
+    it('只有勾选「加入知识库」的目录入库;取消勾选后清理;凭据入库前替换或整块拦截', async () => {
+        const dir = mkdtempSync(path.join(tmpdir(), 'aip-kb-db-'));
+        const base = realpathSync.native(mkdtempSync(path.join(tmpdir(), 'aip-kb-fs-')));
+        const { conn } = await openStorage({ dataDir: dir });
+        try {
+            const repos = createRepositories(conn);
+            const ownerId = repos.owners.create({ username: 'owner', passwordHash: 'x' }).id;
+            const pub = path.join(base, 'notes');
+            const priv = path.join(base, 'private');
+            mkdirSync(pub);
+            mkdirSync(priv);
+            const key = ['sk', '-proj-', 'a1B2c3D4e5F6g7H8i9J0kLmN'].join('');
+            writeFileSync(path.join(pub, 'deploy.md'), `# 部署\n部署时设置 OPENAI_API_KEY=${key} 后重启服务。`);
+            writeFileSync(path.join(pub, 'safe.md'), '# 周报\n本周完成了记忆检索。');
+            writeFileSync(path.join(priv, 'diary.md'), '# 日记\n今天去爬山。');
+            const notes = repos.fsRoots.create(ownerId, { path: pub, label: 'notes', knowledgeBase: true });
+            repos.fsRoots.create(ownerId, { path: priv, label: 'private' });
+
+            const kb = createKnowledgeBase({ repos });
+            const items = createItemService({ repos, onSynced: (o) => void kb.index(o) });
+            await items.sync(ownerId);
+            await kb.idle();
+            // 未勾选的目录不入库
+            expect((await kb.search(ownerId, '爬山', 5)).chunks).toEqual([]);
+            const deploy = (await kb.search(ownerId, '重启服务', 5)).chunks;
+            expect(deploy).toHaveLength(1);
+            expect(deploy[0]!.text).toContain('[已隐藏凭据]');
+            expect(JSON.stringify(deploy)).not.toContain(key);
+            expect(guardCredentials([{ text: 'wifi 密码是 hunter22。记得改', heading: null, page: null }])).toEqual([
+                { text: 'wifi [已隐藏凭据]。记得改', heading: null, page: null },
+            ]);
+
+            repos.fsRoots.setKnowledgeBase(ownerId, notes.id, false);
+            items.invalidate(ownerId);
+            await items.sync(ownerId);
+            await kb.idle();
+            expect(repos.kb.counts(ownerId)).toEqual({ files: 0, chunks: 0 });
         } finally {
             conn.close();
             rmSync(dir, { recursive: true, force: true });

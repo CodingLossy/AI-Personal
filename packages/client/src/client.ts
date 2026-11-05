@@ -15,6 +15,7 @@ import type {
     EmbeddingStatus,
     FsRoot,
     FsRootInput,
+    FsRootPatch,
     Item,
     ItemContent,
     ItemCounts,
@@ -277,6 +278,9 @@ export function createClient(options: ClientOptions) {
             list: () => t.json<Page<FsRoot>>('/fs/roots'),
             add: (body: FsRootInput) => t.json<FsRoot>('/fs/roots', { method: 'POST', body }),
             remove: (id: string) => t.json<void>(`/fs/roots/${enc(id)}`, { method: 'DELETE' }),
+            /** 选择这个目录里的文件是否进入知识库(ADR 0015 第 6 节)。 */
+            update: (id: string, body: FsRootPatch) =>
+                t.json<FsRoot>(`/fs/roots/${enc(id)}`, { method: 'PATCH', body }),
         },
 
         embeddings: {

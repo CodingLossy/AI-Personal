@@ -140,7 +140,7 @@ describe('kb.search(回放评测)', () => {
         );
         writeFileSync(path.join(base, 'notes.md'), '# Holidays\nThe holiday schedule is posted in January.\n');
         writeFileSync(path.join(base, 'image.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
-        expect((await post('/api/v1/fs/roots', { path: base })).status).toBe(201);
+        expect((await post('/api/v1/fs/roots', { path: base, knowledgeBase: true })).status).toBe(201);
         await settle();
 
         expect(s.repos.kb.counts(ownerId)).toEqual({ files: 2, chunks: 4 }); // png 不进知识库
@@ -165,7 +165,7 @@ describe('kb.search(回放评测)', () => {
     it('没有 embed 配置档时用全文检索兜底;文件未变时不重新分块', async () => {
         const { post, ownerId, settle, ask, embedCalls } = await setup({ embed: false });
         writeFileSync(path.join(base, 'faq.txt'), 'Shipping takes five days.\n\nOffice hours are 9 to 6.');
-        await post('/api/v1/fs/roots', { path: base });
+        await post('/api/v1/fs/roots', { path: base, knowledgeBase: true });
         await settle();
         expect(s.repos.kb.counts(ownerId)).toEqual({ files: 1, chunks: 1 });
         expect(embedCalls).toEqual([]);

@@ -13,6 +13,7 @@ export {
     createKnowledgeBase,
     embedText,
     formatResults,
+    guardCredentials,
     KB_EXTENSIONS,
     type KbVectors,
     type KnowledgeBase,

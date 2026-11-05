@@ -6,7 +6,8 @@
 import { basename, extname } from 'node:path';
 import type { KbCitation, KbSearchOutput } from '@ai-personal/shared';
 import type { KbChunk, KbChunkInput, Repositories } from '@ai-personal/storage';
-import type { ToolDefinition } from '@ai-personal/tools';
+import { detectCredential, redactCredentials } from '@ai-personal/memory/secrets';
+import { isWithin, type ToolDefinition } from '@ai-personal/tools';
 import { z } from 'zod';
 import { readAuthorizedFile } from '../files.js';
 import { chunkText } from './chunk.js';
@@ -35,6 +36,21 @@ export interface KnowledgeBaseOptions {
     onError?: (error: unknown, context: { itemId?: string }) => void;
 }
 
+/**
+ * 入库前的凭据检测(ADR 0015 第 7 节,复用记忆的规则):能定位的凭据替换为占位文字;
+ * 替换后仍能检测到凭据的块整块丢弃。原文不进入分块表、FTS 与向量。
+ */
+export function guardCredentials(chunks: KbChunkInput[]): KbChunkInput[] {
+    const out: KbChunkInput[] = [];
+    for (const chunk of chunks) {
+        const text = redactCredentials(chunk.text).text;
+        const heading = chunk.heading ? redactCredentials(chunk.heading).text : chunk.heading;
+        if (detectCredential(text) || (heading && detectCredential(heading))) continue;
+        out.push({ ...chunk, text, heading });
+    }
+    return out;
+}
+
 /** 交给嵌入的文本:带上文件名与标题,让短片段也有上下文。 */
 export function embedText(file: string, chunk: KbChunkInput): string {
     const title = chunk.heading ? `${file} › ${chunk.heading}` : file;
@@ -53,10 +69,20 @@ export function createKnowledgeBase(options: KnowledgeBaseOptions) {
             repos.embeddings.removeItem(itemId);
         }
         const size = repos.settings.get(ownerId).knowledgeBase.chunkChars;
-        const roots = repos.fsRoots.list(ownerId).map((r) => r.path);
+        const allRoots = repos.fsRoots.list(ownerId);
+        const roots = allRoots.map((r) => r.path);
+        // 只有勾选了「加入知识库」的目录才入库;取消勾选后清理已有的分块与向量(ADR 0015 第 6 节)
+        const kbRoots = allRoots.filter((r) => r.knowledgeBase).map((r) => r.path);
         for (const file of repos.kb.files(ownerId)) {
             const ext = extname(file.path).toLowerCase();
             if (!KB_EXTENSIONS.has(ext)) continue;
+            if (!kbRoots.some((root) => isWithin(file.path, root))) {
+                if (repos.kb.source(file.itemId)) {
+                    repos.kb.remove(file.itemId);
+                    repos.embeddings.removeItem(file.itemId);
+                }
+                continue;
+            }
             const source = repos.kb.source(file.itemId);
             if (source && source.mtime === file.mtime && source.size === file.size && source.chunkChars === size) {
                 continue;
@@ -66,7 +92,7 @@ export function createKnowledgeBase(options: KnowledgeBaseOptions) {
             try {
                 // 与 fs.read 同一套路径校验与解析(ADR 0011):越权或解析失败时只记录错误
                 const { text } = await readAuthorizedFile(file.path, roots);
-                chunks = chunkText(text, { size, pdf: ext === '.pdf' });
+                chunks = guardCredentials(chunkText(text, { size, pdf: ext === '.pdf' }));
             } catch (e) {
                 error = (e instanceof Error ? e.message : String(e)).slice(0, 300);
                 options.onError?.(e, { itemId: file.itemId });

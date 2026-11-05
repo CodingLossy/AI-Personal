@@ -185,3 +185,5 @@ CREATE INDEX idx_mem_lookup ON memory_facts(owner_id, status, mem_type);
 - **工具**:`memory.digest`(read);`memory.feedback`(write,条件预授权恒成立,本轮出现过外部内容时照常审批);`memory.forget`(write,`preauthorizable: false`,每次都要审批,不能「总是允许」)。`ToolDefinition` 新增 `preauthorizable?: false`。
 - **memory ItemProvider**(`apps/server/src/memory-provider.ts`):导航树在写入时维护,`sync` 不做事;`open` 返回陈述、可信度、出处与更替历史。记忆现在出现在 `GET /items/roots` 并可以浏览与打开;条目搜索、变更流与给模型的 `items.*` 工具仍然不含记忆(模型通过带渠道过滤的 `memory.*` 工具检索)。`GET /items/{id}/children` 新增 `includeHidden`(默认 false),默认不返回 `meta.hidden` 的子项(「历史版本」);过滤在分页之后,本页可能少于 `limit` 条。
 - **Web**:聊天中「本次用到的记忆」面板(来自 `memory-used` 事件,带有用 / 过时 / 错误(可填写更正)/ 不该记);记忆页增加历史、待确认的矛盾与隔离区。
+- **业主确认**(2026-11-05):`sensitive` 反馈先保持直接删除,以后再加「只提高敏感级别」;撤销与「忘记」共用 `memory-undo`,靠摘要区分,不重建审计表;分页后再过滤隐藏项可以接受,游标保持可用。
+- **M2 PR 15 调整**:中文二字词召回的停用字只保留几乎只作虚词或人称用的字(我、你、您、的、了、吗、呢、吧、啊、呀、么),其余改为按词排除(「他们」「可以」「没有」等)。记忆评测发现原来的停用字会丢掉「过敏」「吉他」这类实词。
