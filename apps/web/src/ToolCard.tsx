@@ -81,7 +81,7 @@ function RememberedNotice({ input, output }: { input: unknown; output: unknown }
     const id = result.id;
     const undo = async () => {
         try {
-            await api.memory.delete(id);
+            await api.memory.delete(id, 'undo');
             setUndone(true);
         } catch (e) {
             setError(errorText(e));

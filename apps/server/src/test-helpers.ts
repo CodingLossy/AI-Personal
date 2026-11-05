@@ -14,6 +14,7 @@ import { createItemService, createKnowledgeBase, type KnowledgeBase } from '@ai-
 import { createSummarizer, createToolRegistry } from './agent-setup.js';
 import { createApp, type AppDeps } from './app.js';
 import { createMemoryStack } from './memory-setup.js';
+import { itemProviders } from './memory-provider.js';
 import { createMcpControl } from './mcp-setup.js';
 import { createEmbeddingService, type EmbeddingService } from './embeddings.js';
 import { FailureLimiter } from './auth/rate-limit.js';
@@ -80,7 +81,11 @@ export async function createTestServer(
     const embeddings = createEmbeddingService({ repos, providerFor, redact: (text) => redactor.redact(text) });
     const memory = createMemoryStack(repos, embeddings);
     const kb = createKnowledgeBase({ repos, vectors: embeddings });
-    const items = createItemService({ repos, onSynced: (ownerId) => void kb.index(ownerId) });
+    const items = createItemService({
+        repos,
+        providers: itemProviders(),
+        onSynced: (ownerId) => void kb.index(ownerId),
+    });
     const bus = new EventBus();
     const runs = new RunManager({
         repos,

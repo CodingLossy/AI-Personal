@@ -20,7 +20,10 @@ export type {
 } from './memory-read.js';
 export type { JobState, MaintenanceRow, MemoryMaintenanceRepository } from './memory-maintenance.js';
 export type {
+    ConflictResolution,
+    FeedbackSignal as StoredFeedbackSignal,
     MemoryConflict,
+    MemorySourceRow,
     NewMemory,
     QuarantineEntry,
     QuarantineReason,

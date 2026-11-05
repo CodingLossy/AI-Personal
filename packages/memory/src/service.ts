@@ -10,11 +10,14 @@ import {
     MemoryWriteInput as MemoryWriteInputSchema,
     type MemoryWriteResult,
     type Memory,
+    type MemoryFeedbackInput,
+    MemoryFeedbackInput as MemoryFeedbackInputSchema,
+    type MemoryFeedbackResult,
 } from '@ai-personal/shared';
 import type { QuarantineReason, Repositories } from '@ai-personal/storage';
 import { isProfileKey, normalizeEntityKey } from './entity-keys.js';
 import { looksLikeInstruction } from './instructions.js';
-import { detectCredentialIn } from './secrets.js';
+import { detectCredential, detectCredentialIn } from './secrets.js';
 import { redactSensitive, redactSensitiveIn } from './sensitive.js';
 
 /** 隔离原因对应的写入结果原因(MemoryWriteResult.reason 的取值更少)。 */
@@ -87,6 +90,20 @@ export interface MemoryService {
     canWriteWithoutApproval(ownerId: string, input: unknown): boolean;
     /** M1 的写入接口,等同于 write(ownerId, input, { origin })。 */
     save(ownerId: string, input: MemorySaveInput, origin: Memory['origin']): MemorySaveResult;
+    /**
+     * 反馈(补充设计第 6 节),立即生效:helpful 提高置信度并回到 active;stale 降低置信度,连续两次转 cold;
+     * wrong 有更正时按更替写入新值(user_explicit),没有时撤回;sensitive 默认硬删除。
+     * 同一条记忆、同一信号,每个运行只计一次。返回 null 表示记忆不存在。
+     */
+    feedback(
+        ownerId: string,
+        input: MemoryFeedbackInput,
+        context?: { channel?: string | undefined },
+    ): MemoryFeedbackResult | null;
+    /** 「忘记」:硬删除,级联删除出处、反馈、冲突、嵌入与向量(ADR 0007 第 5.2 节第 5 条)。 */
+    forget(ownerId: string, id: string): boolean;
+    /** 把隔离区条目提升为记忆(用户确认过,origin = manual);凭据仍然拒存。返回 null 表示条目不存在。 */
+    promote(ownerId: string, quarantineId: string): MemoryWriteResult | null;
     search(ownerId: string, input: MemorySearchInput): MemorySearchResult;
     /**
      * 给模型用的检索:query 为空,或检索没有命中时,回退为最近更新的 active 记忆(最多 RECALL_FALLBACK_LIMIT 条),
@@ -177,6 +194,71 @@ export function createMemoryService(repos: Repositories, hooks: MemoryServiceHoo
         },
         save(ownerId, input, origin) {
             return this.write(ownerId, input, { origin });
+        },
+        feedback(ownerId, rawInput, context = {}) {
+            const input = MemoryFeedbackInputSchema.parse(rawInput);
+            const old = repos.memories.get(ownerId, input.id);
+            if (!old) return null;
+            const correction = input.signal === 'wrong' ? input.correction?.trim() : undefined;
+            const recorded = repos.memories.feedback(ownerId, input.id, input.signal, {
+                note: correction ? redactSensitive(correction).text : null,
+                runId: input.runId ?? null,
+                channel: context.channel ?? null,
+                retract: !correction,
+            });
+            if (recorded === 'not_found') return null;
+            if (recorded === 'duplicate') return { outcome: 'duplicate' };
+            if (input.signal === 'sensitive') {
+                this.forget(ownerId, input.id);
+                return { outcome: 'deleted' };
+            }
+            if (correction) {
+                if (detectCredential(correction)) {
+                    hooks.onChanged?.(ownerId);
+                    return { outcome: 'applied' }; // 更正里有凭据:只记反馈,不写入
+                }
+                const text = redactSensitive(correction);
+                const result = repos.memories.replace(ownerId, old.id, {
+                    text: text.text.slice(0, MAX_TEXT),
+                    memType: old.memType,
+                    subtype: old.subtype,
+                    entityKey: old.entityKey,
+                    cardinality: old.cardinality,
+                    value: null,
+                    domain: old.domain,
+                    sensitivity: text.sensitivity,
+                    confidence: INITIAL_CONFIDENCE.user_explicit,
+                    origin: 'user_explicit',
+                });
+                hooks.onChanged?.(ownerId);
+                if (!result) return null;
+                hooks.onCreated?.(ownerId, result.id, text.text.slice(0, MAX_TEXT));
+                return { outcome: 'corrected', id: result.id };
+            }
+            hooks.onChanged?.(ownerId);
+            return { outcome: 'applied' };
+        },
+        forget(ownerId, id) {
+            const deleted = repos.memories.delete(ownerId, id);
+            if (deleted) hooks.onChanged?.(ownerId);
+            return deleted;
+        },
+        promote(ownerId, quarantineId) {
+            const entry = repos.memories.quarantineEntry(ownerId, quarantineId);
+            if (!entry) return null;
+            // 用户在隔离区里确认过:按 manual 写入;仍然经过凭据检测、校验与脱敏
+            const raw = entry.raw && typeof entry.raw === 'object' ? { ...(entry.raw as object) } : entry.raw;
+            const result = this.write(ownerId, raw, {
+                origin: 'manual',
+                ...(entry.sessionId ? { sessionId: entry.sessionId } : {}),
+            });
+            // 校验仍然失败时不会重复进隔离区:删掉新产生的那条,保留原条目
+            if (result.outcome === 'quarantined') {
+                if (result.id) repos.memories.deleteQuarantine(ownerId, result.id);
+                return result;
+            }
+            repos.memories.deleteQuarantine(ownerId, quarantineId);
+            return result;
         },
         search(ownerId, rawInput) {
             const input = MemorySearchInputSchema.parse(rawInput);

@@ -51,6 +51,12 @@ All notable user-visible changes are listed here. The format follows [Keep a Cha
   - A short digest of pinned memories, profile facts, accepted decisions and open conflicts is added at the start of each session (`memory.digestTokens`, default 400).
 - New tool `memory.retrieve` (`memory.search` is now its alias) and endpoints `POST /memory/retrieve` and `GET /memory/digest`. The `memory-used` event is now sent with the memories used in each turn.
 - **Memory maintenance** (ADR 0007 §5.7): every day at 03:30 (server time) memories decay by type (half-life 30 days for experiences, 180 for methods, 365 for facts, 90 for finished decisions; pinned and profile facts do not decay). Rarely used memories move to cold and then archive storage, archived memories lose their vectors but stay searchable by text, and facts past their end date expire. Using a memory again brings it back. The jobs run in small batches and wait while a chat is running.
+- **Memory feedback and management** (ADR 0007 §5.8):
+  - after a reply, "Memories used this turn" lists the memories the assistant saw, with Helpful, Out of date, Wrong (with an optional correction that replaces the memory at once) and Should not be kept (deletes it);
+  - the Memory page shows each memory's history, conflicts to confirm (keep one, keep both or dismiss) and the quarantine, where you can confirm a candidate;
+  - memories appear in the knowledge map as Memory → domain → type; older versions are hidden by default.
+- New endpoints `POST /memory/{id}/feedback`, `GET /memory/{id}/sources`, `GET /memory/{id}/history`, `GET /memory/conflicts`, `POST /memory/conflicts/{id}/resolve`, `GET /memory/quarantine` and `POST /memory/quarantine/{id}/promote`; `GET /items/{id}/children` gains `includeHidden`. New tools `memory.digest`, `memory.feedback` and `memory.forget` (always needs approval).
+- Undoing a new memory and forgetting a memory are now recorded in the audit log (memory id only).
 
 #### Changed
 
@@ -132,6 +138,9 @@ All notable user-visible changes are listed here. The format follows [Keep a Cha
 - **记忆检索**(ADR 0007 第 5.6 节):相关记忆现在会自动加进对话。召回结合全文检索(含中文二字词回退)、有 embed 配置档时的向量检索,以及关联条目;每条带可信度标签(可靠 / 可能过时 / 有冲突 / 推断),分数最高的几条附出处。记忆块不超过 `memory.blockTokens`(默认 1,200 tokens,且不超过模型上下文的 10%)。每个会话开头注入一段 digest:置顶记忆、画像事实、已接受的决策与待确认的冲突(`memory.digestTokens`,默认 400)。
 - 新工具 `memory.retrieve`(`memory.search` 成为它的别名),新端点 `POST /memory/retrieve` 与 `GET /memory/digest`;每轮会发送 `memory-used` 事件,列出用到的记忆。
 - **记忆维护**(ADR 0007 第 5.7 节):每天 03:30(服务器时间)按类型衰减(经历半衰期 30 天、方法 180 天、事实 365 天、已完成的决策 90 天;置顶与画像事实不衰减)。很少用到的记忆先转为 cold 再转为 archive,归档的记忆删除向量但仍可全文检索;超过有效期的事实标为过期。再次用到时回到 active。任务分小批执行,有对话进行中时等待。
+- **记忆反馈与管理**(ADR 0007 第 5.8 节):回答之后,「本次用到的记忆」列出助手看到的记忆,可以点有用、过时、错误(可填写更正,立即替换)或不该记(删除);记忆页显示每条记忆的历史、待确认的矛盾(保留一条、两条都对或忽略)和隔离区(可以确认保存);记忆出现在知识地图「记忆 → 域 → 类型」中,旧版本默认隐藏。
+- 新端点 `POST /memory/{id}/feedback`、`GET /memory/{id}/sources`、`GET /memory/{id}/history`、`GET /memory/conflicts`、`POST /memory/conflicts/{id}/resolve`、`GET /memory/quarantine`、`POST /memory/quarantine/{id}/promote`;`GET /items/{id}/children` 新增 `includeHidden`。新工具 `memory.digest`、`memory.feedback` 与 `memory.forget`(每次都要审批)。
+- 撤销新记忆与「忘记」记忆现在都会写入审计日志(只记记忆 id)。
 - `memory.search` 带查询而没有命中时,不再回退为最近 20 条;空查询仍列出最近的记忆。
 - 服务器重启时尚未处理的审批请求会过期,不再悄悄丢失。
 

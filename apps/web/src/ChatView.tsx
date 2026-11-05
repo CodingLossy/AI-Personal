@@ -10,6 +10,7 @@ import { applyEvent, newTurn, type LiveTool, type LiveTurn } from './live-turn.j
 import { Markdown } from './Markdown.js';
 import { navigate } from './router.js';
 import { ToolCard } from './ToolCard.js';
+import { UsedMemories } from './UsedMemories.js';
 
 /** 新对话:先建会话再跳转,跳转后的 ChatView 负责发送这条消息。 */
 let pendingSend: { sessionId: string; text: string } | null = null;
@@ -39,6 +40,8 @@ export function ChatView({
     const [live, setLive] = useState<LiveTurn | null>(null);
     const [input, setInput] = useState('');
     const [error, setError] = useState<string | null>(null);
+    /** 最近一轮用到的记忆;下一轮开始时清空。 */
+    const [used, setUsed] = useState<{ runId: string | null; ids: string[] } | null>(null);
     const abort = useRef<AbortController | null>(null);
     const bottom = useRef<HTMLDivElement>(null);
 
@@ -52,6 +55,7 @@ export function ChatView({
         async (id: string, stream: RunStream, turn: LiveTurn, signal: AbortSignal) => {
             let current = turn;
             setLive(current);
+            setUsed(null);
             try {
                 for await (const envelope of stream) {
                     current = applyEvent(current, envelope);
@@ -64,6 +68,7 @@ export function ChatView({
             if (signal.aborted) return;
             if (current.error) setError(current.error.detail ?? current.error.title);
             await loadMessages(id, null).catch(() => undefined);
+            if (current.memoryIds.length > 0) setUsed({ runId: current.runId, ids: current.memoryIds });
             setLive(null);
             void onSessionsChanged();
         },
@@ -188,6 +193,7 @@ export function ChatView({
                         ) : null}
                     </div>
                 ) : null}
+                {used && !live ? <UsedMemories key={used.runId ?? ''} runId={used.runId} ids={used.ids} /> : null}
                 {error ? <p className="error">{t('chat.failed', { msg: error })}</p> : null}
                 <div ref={bottom} />
             </div>

@@ -24,13 +24,15 @@ export interface LiveTurn {
     userText: string | null;
     text: string;
     tools: LiveTool[];
+    /** 本轮用到的记忆(memory-used 事件,ADR 0007 第 5.6 节)。 */
+    memoryIds: string[];
     done: boolean;
     finishReason?: 'stop' | 'length' | 'cancelled';
     error?: ProblemDetails;
 }
 
 export function newTurn(userText: string | null, runId: string | null = null): LiveTurn {
-    return { runId, userText, text: '', tools: [], done: false };
+    return { runId, userText, text: '', tools: [], memoryIds: [], done: false };
 }
 
 function updateTool(turn: LiveTurn, callId: string, fn: (t: LiveTool) => LiveTool): LiveTurn {
@@ -68,6 +70,8 @@ export function applyEvent(turn: LiveTurn, envelope: EventEnvelope): LiveTurn {
                 ...t,
                 result: { output: e.output, ...(e.error ? { error: e.error } : {}) },
             }));
+        case 'memory-used':
+            return { ...turn, memoryIds: [...new Set([...turn.memoryIds, ...e.ids])] };
         case 'run-finished':
             return { ...turn, done: true, finishReason: e.reason };
         case 'run-failed':

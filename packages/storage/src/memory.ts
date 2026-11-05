@@ -59,6 +59,21 @@ export type SaveOutcome =
     | { outcome: 'superseded'; id: string; supersededId: string }
     | { outcome: 'conflicted'; id: string; conflictId: string };
 
+export interface MemorySourceRow {
+    id: string;
+    sessionId: string | null;
+    userMessageId: string | null;
+    answerMessageId: string | null;
+    itemId: string | null;
+    excerpt: string | null;
+    createdAt: string;
+}
+
+export type FeedbackSignal = 'helpful' | 'stale' | 'wrong' | 'sensitive';
+export type ConflictResolution = 'kept_a' | 'kept_b' | 'both_valid' | 'dismissed';
+/** 沿更替链最多走的步数,防止异常数据造成死循环。 */
+const MAX_HISTORY = 100;
+
 export type QuarantineReason =
     'schema_invalid' | 'secret_detected' | 'low_confidence' | 'untrusted_source' | 'too_long';
 
@@ -278,6 +293,45 @@ export function createMemoryRepository(conn: Connection, now: () => Date, items:
             `${SELECT} WHERE f.owner_id = ? AND f.status IN ('active','conflicted') AND i.summary LIKE ? ESCAPE '\\'
              ORDER BY f.updated_at DESC LIMIT ?`,
         ),
+        // 反馈(补充设计第 6 节)
+        insertFeedback: sqlite.prepare(
+            `INSERT INTO memory_feedback (id, memory_id, signal, note, run_id, channel, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        ),
+        helpful: sqlite.prepare(
+            `UPDATE memory_facts SET confidence = min(0.99, confidence + 0.05), last_confirmed_at = @at, tier = 'active',
+                    helpful_count = helpful_count + 1, updated_at = @at WHERE item_id = @id`,
+        ),
+        stale: sqlite.prepare(
+            `UPDATE memory_facts SET confidence = max(0, confidence - 0.15), stale_count = stale_count + 1,
+                    tier = CASE WHEN stale_count + 1 >= 2 AND tier = 'active' THEN 'cold' ELSE tier END, updated_at = @at
+             WHERE item_id = @id`,
+        ),
+        wrong: sqlite.prepare(
+            `UPDATE memory_facts SET wrong_count = wrong_count + 1, updated_at = @at,
+                    status = CASE WHEN @retract = 1 THEN 'retracted' ELSE status END,
+                    confidence = CASE WHEN @retract = 1 THEN confidence * 0.3 ELSE confidence END
+             WHERE item_id = @id`,
+        ),
+        sources: sqlite.prepare<[string, string], MemorySourceRow>(
+            `SELECT s.id, s.session_id AS sessionId, s.user_message_id AS userMessageId,
+                    s.answer_message_id AS answerMessageId, s.source_item_id AS itemId, s.excerpt, s.created_at AS createdAt
+             FROM memory_sources s JOIN memory_facts f ON f.item_id = s.memory_id
+             WHERE f.owner_id = ? AND s.memory_id = ? ORDER BY s.created_at DESC, s.id DESC`,
+        ),
+        supersededBy: sqlite.prepare<[string, string], Row>(`${SELECT} WHERE f.owner_id = ? AND f.supersedes_id = ?`),
+        getConflict: sqlite.prepare<[string, string], MemoryConflict>(
+            `SELECT id, a_id AS aId, b_id AS bId, kind, status, created_at AS createdAt FROM memory_conflicts
+             WHERE owner_id = ? AND id = ?`,
+        ),
+        resolveConflict: sqlite.prepare('UPDATE memory_conflicts SET status = ?, resolved_at = ? WHERE id = ?'),
+        setCardinality: sqlite.prepare('UPDATE memory_facts SET cardinality = ? WHERE item_id = ?'),
+        getQuarantine: sqlite.prepare<[string, string, string], Omit<QuarantineEntry, 'raw'> & { rawJson: string }>(
+            `SELECT id, session_id AS sessionId, raw_json AS rawJson, reason, created_at AS createdAt,
+                    expires_at AS expiresAt
+             FROM memory_quarantine WHERE owner_id = ? AND id = ? AND expires_at > ?`,
+        ),
+        deleteQuarantine: sqlite.prepare('DELETE FROM memory_quarantine WHERE owner_id = ? AND id = ?'),
     };
 
     function addSource(memoryId: string, source: NewMemory['source'], at: string): void {
@@ -468,6 +522,141 @@ export function createMemoryRepository(conn: Connection, now: () => Date, items:
         /** 删除所有已过期的隔离区条目,返回删除的条数(维护任务调用)。 */
         purgeQuarantine(): number {
             return q.purgeQuarantine.run(iso()).changes;
+        },
+        /**
+         * 记一条反馈并立即生效(补充设计第 6 节);同一条记忆、同一信号,每个运行只计一次(唯一索引)。
+         * wrong 默认撤回这条记忆;带更正时由调用方传 retract: false,再用 replace 写入新值。
+         * sensitive 只记录,删除由调用方决定。
+         */
+        feedback(
+            ownerId: string,
+            id: string,
+            signal: FeedbackSignal,
+            options: { note?: string | null; runId?: string | null; channel?: string | null; retract?: boolean } = {},
+        ): 'ok' | 'duplicate' | 'not_found' {
+            return sqlite.transaction((): 'ok' | 'duplicate' | 'not_found' => {
+                if (!q.get.get(ownerId, id)) return 'not_found';
+                const at = iso();
+                try {
+                    q.insertFeedback.run(
+                        newId(now()),
+                        id,
+                        signal,
+                        options.note ?? null,
+                        options.runId ?? null,
+                        options.channel ?? null,
+                        at,
+                    );
+                } catch (error) {
+                    if ((error as { code?: string }).code === 'SQLITE_CONSTRAINT_UNIQUE') return 'duplicate';
+                    throw error;
+                }
+                if (signal === 'helpful') q.helpful.run({ id, at });
+                if (signal === 'stale') q.stale.run({ id, at });
+                if (signal === 'wrong') q.wrong.run({ id, at, retract: options.retract === false ? 0 : 1 });
+                return 'ok';
+            })();
+        },
+        /**
+         * 用新内容更替一条指定的记忆(「错误」反馈带更正时):旧记录标为 superseded 并挂到历史版本,
+         * 新记录指向旧记录。单值键已有另一条 active 时按普通写入处理(由 save 决定更替或冲突)。
+         */
+        replace(ownerId: string, oldId: string, input: NewMemory): SaveOutcome | null {
+            return sqlite.transaction((): SaveOutcome | null => {
+                const old = q.get.get(ownerId, oldId);
+                if (!old) return null;
+                if (input.entityKey && input.cardinality === 'single') {
+                    const active = q.activeSingle.get(ownerId, input.entityKey);
+                    if (active && active.id !== oldId) return this.save(ownerId, input);
+                }
+                q.supersede.run({ id: old.id, at: iso() });
+                place(ownerId, { ...old, status: 'superseded' });
+                const id = insert(ownerId, input);
+                q.setSupersedes.run(old.id, id);
+                q.supersedesEdge.run(id, old.id);
+                return { outcome: 'superseded', id, supersededId: old.id };
+            })();
+        },
+        /** 出处,最新的在前。 */
+        sources(ownerId: string, id: string): MemorySourceRow[] {
+            return q.sources.all(ownerId, id);
+        },
+        /** 更替链:更新的版本在前,然后是这条本身,再往前是更早的版本。 */
+        history(ownerId: string, id: string): Memory[] | null {
+            const self = q.get.get(ownerId, id);
+            if (!self) return null;
+            const newer: Row[] = [];
+            let cursor: Row | undefined = self;
+            while (newer.length < MAX_HISTORY && (cursor = q.supersededBy.get(ownerId, cursor.id)))
+                newer.unshift(cursor);
+            const older: Row[] = [];
+            let prev: Row | undefined = self;
+            while (older.length < MAX_HISTORY && prev.supersedesId && (prev = q.get.get(ownerId, prev.supersedesId))) {
+                older.push(prev);
+            }
+            return [...newer, self, ...older].map(toMemory);
+        },
+        conflict(ownerId: string, id: string): MemoryConflict | null {
+            return q.getConflict.get(ownerId, id) ?? null;
+        },
+        /**
+         * 处理冲突:kept_a / kept_b 保留一条(另一条标为 superseded 并挂到历史版本);both_valid 两条都保留
+         * (单值键改为 multi);dismissed 只关闭冲突,不改记忆。
+         */
+        resolveConflict(
+            ownerId: string,
+            conflictId: string,
+            resolution: ConflictResolution,
+        ): 'ok' | 'not_found' | 'not_open' {
+            return sqlite.transaction((): 'ok' | 'not_found' | 'not_open' => {
+                const conflict = q.getConflict.get(ownerId, conflictId);
+                if (!conflict) return 'not_found';
+                if (conflict.status !== 'open') return 'not_open';
+                const at = iso();
+                const a = q.get.get(ownerId, conflict.aId);
+                const b = q.get.get(ownerId, conflict.bId);
+                if (a && b && (resolution === 'kept_a' || resolution === 'kept_b')) {
+                    const [winner, loser] = resolution === 'kept_a' ? [a, b] : [b, a];
+                    if (loser.status === 'conflicted') {
+                        q.supersede.run({ id: loser.id, at });
+                        place(ownerId, { ...loser, status: 'superseded' });
+                        q.supersedesEdge.run(winner.id, loser.id);
+                        if (!winner.supersedesId) q.setSupersedes.run(loser.id, winner.id);
+                    }
+                    const taken =
+                        winner.entityKey && winner.cardinality === 'single'
+                            ? q.activeSingle.get(ownerId, winner.entityKey)
+                            : undefined;
+                    // 冲突期间用户已经明说了新值时,保留的这条也只能进历史版本
+                    if (winner.status === 'conflicted') {
+                        if (taken && taken.id !== winner.id) {
+                            q.supersede.run({ id: winner.id, at });
+                            place(ownerId, { ...winner, status: 'superseded' });
+                        } else {
+                            q.setStatus.run('active', at, winner.id);
+                            q.confirmedAt.run(at, winner.id);
+                        }
+                    }
+                }
+                if (a && b && resolution === 'both_valid') {
+                    for (const m of [a, b]) {
+                        if (m.status !== 'conflicted') continue;
+                        q.setCardinality.run('multi', m.id);
+                        q.setStatus.run('active', at, m.id);
+                    }
+                }
+                q.resolveConflict.run(resolution, at, conflictId);
+                return 'ok';
+            })();
+        },
+        quarantineEntry(ownerId: string, id: string): QuarantineEntry | null {
+            const row = q.getQuarantine.get(ownerId, id, iso());
+            if (!row) return null;
+            const { rawJson, ...rest } = row;
+            return { ...rest, raw: JSON.parse(rawJson) as unknown };
+        },
+        deleteQuarantine(ownerId: string, id: string): boolean {
+            return q.deleteQuarantine.run(ownerId, id).changes > 0;
         },
         get(ownerId: string, id: string): Memory | null {
             const row = q.get.get(ownerId, id);

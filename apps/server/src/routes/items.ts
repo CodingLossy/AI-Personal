@@ -126,10 +126,13 @@ export interface ItemRouteDeps {
 
 export function itemRoutes(deps: ItemRouteDeps) {
     const { repos, items } = deps;
-    /** 未删除且不是记忆条目(记忆在 PR 15 有自己的提供者之前不进入浏览)。 */
+    /**
+     * 未删除的条目。记忆自 M2 PR 14 起有自己的提供者,可以在知识地图中浏览与打开(ADR 0007 第 5.8 节);
+     * 条目搜索、变更流与给模型的 items.* 工具仍然不含记忆(模型通过 memory.* 工具检索,带渠道过滤)。
+     */
     const live = (ownerId: string, id: string) => {
         const item = repos.items.get(ownerId, id);
-        if (!item || item.deletedAt || item.source === 'memory') throw notFound('Item');
+        if (!item || item.deletedAt) throw notFound('Item');
         return item;
     };
     return router()
@@ -154,7 +157,12 @@ export function itemRoutes(deps: ItemRouteDeps) {
             const ownerId = requireOwner(c);
             const { id } = c.req.valid('param');
             live(ownerId, id);
-            return c.json(repos.items.children(ownerId, id, c.req.valid('query')), 200);
+            const { includeHidden, ...query } = c.req.valid('query');
+            const page = repos.items.children(ownerId, id, query);
+            // 默认视图隐藏 meta.hidden 的子项(记忆的「历史版本」);分页游标不变,本页可能少于 limit 条
+            if (includeHidden) return c.json(page, 200);
+            const visible = page.items.filter((i) => (i.meta as { hidden?: unknown } | null)?.hidden !== true);
+            return c.json({ ...page, items: visible }, 200);
         })
         .openapi(ancestorsRoute, (c) => {
             const ownerId = requireOwner(c);

@@ -28,11 +28,21 @@ import type {
     LoginResponse,
     Me,
     Memory,
+    MemoryConflict,
+    MemoryDigest,
+    MemoryFeedbackBody,
+    MemoryFeedbackResult,
     MemoryPatch,
+    MemoryRetrieveInput,
+    MemoryRetrieveResult,
     MemorySaveInput,
     MemorySaveResult,
     MemorySearchInput,
     MemorySearchResult,
+    MemorySource,
+    MemoryWriteResult,
+    QuarantinedMemory,
+    ConflictResolveInput,
     Message,
     MetaResponse,
     ModelProfile,
@@ -307,7 +317,22 @@ export function createClient(options: ClientOptions) {
             search: (body: MemorySearchInput) => t.json<MemorySearchResult>('/memory/search', { method: 'POST', body }),
             get: (id: string) => t.json<Memory>(`/memory/${enc(id)}`),
             update: (id: string, body: MemoryPatch) => t.json<Memory>(`/memory/${enc(id)}`, { method: 'PATCH', body }),
-            delete: (id: string) => t.json<void>(`/memory/${enc(id)}`, { method: 'DELETE' }),
+            /** reason 为 undo 时审计记为「撤销」,否则为「忘记」(ADR 0007 第 5.8 节)。 */
+            delete: (id: string, reason: 'undo' | 'forget' = 'forget') =>
+                t.json<void>(`/memory/${enc(id)}`, { method: 'DELETE', query: { reason } }),
+            retrieve: (body: MemoryRetrieveInput) =>
+                t.json<MemoryRetrieveResult>('/memory/retrieve', { method: 'POST', body }),
+            digest: () => t.json<MemoryDigest>('/memory/digest'),
+            feedback: (id: string, body: MemoryFeedbackBody) =>
+                t.json<MemoryFeedbackResult>(`/memory/${enc(id)}/feedback`, { method: 'POST', body }),
+            sources: (id: string) => t.json<Page<MemorySource>>(`/memory/${enc(id)}/sources`),
+            history: (id: string) => t.json<Page<Memory>>(`/memory/${enc(id)}/history`),
+            conflicts: () => t.json<Page<MemoryConflict>>('/memory/conflicts'),
+            resolveConflict: (id: string, body: ConflictResolveInput) =>
+                t.json<void>(`/memory/conflicts/${enc(id)}/resolve`, { method: 'POST', body }),
+            quarantine: () => t.json<Page<QuarantinedMemory>>('/memory/quarantine'),
+            promote: (id: string) =>
+                t.json<MemoryWriteResult>(`/memory/quarantine/${enc(id)}/promote`, { method: 'POST' }),
         },
 
         /** WebSocket 事件订阅,断线自动带 lastSeq 重连补发(ADR 0004 第 5 节)。 */

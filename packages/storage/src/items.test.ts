@@ -131,7 +131,8 @@ describe('items:查询', () => {
             );
         }
         items.upsert(t.ownerId, { ...input('memory', null), source: 'memory' });
-        expect(items.roots(t.ownerId).map((r) => r.title)).toEqual(['小说']);
+        // 记忆自 M2 PR 14 起有自己的提供者,根类别出现在 roots 中(ADR 0007 第 5.8 节)
+        expect(items.roots(t.ownerId).map((r) => r.title)).toEqual(['memory', '小说']);
 
         const first = items.children(t.ownerId, book.id, { limit: 2, sort: 'position' });
         const second = items.children(t.ownerId, book.id, { limit: 2, sort: 'position', cursor: first.nextCursor! });

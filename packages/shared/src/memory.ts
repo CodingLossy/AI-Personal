@@ -182,3 +182,58 @@ export const MemoryFeedbackInput = z.object({
     runId: Id.optional(),
 });
 export type MemoryFeedbackInput = z.infer<typeof MemoryFeedbackInput>;
+
+// ---------- 记忆 v2:反馈、出处、历史、冲突与隔离区(M2 PR 14,ADR 0007 第 5.8 节) ----------
+
+/** POST /api/v1/memory/{id}/feedback 的请求体(id 在路径中)。 */
+export const MemoryFeedbackBody = MemoryFeedbackInput.omit({ id: true });
+export type MemoryFeedbackBody = z.infer<typeof MemoryFeedbackBody>;
+
+export const MemoryFeedbackResult = z.object({
+    /**
+     * applied:已生效;duplicate:同一运行内已经反馈过;corrected:按更正写入了新值(id 为新记忆);
+     * deleted:sensitive 反馈,记忆已硬删除。
+     */
+    outcome: z.enum(['applied', 'duplicate', 'corrected', 'deleted']),
+    id: Id.optional(),
+});
+export type MemoryFeedbackResult = z.infer<typeof MemoryFeedbackResult>;
+
+/** 一条出处:来自哪个会话的哪条消息,或哪个条目。 */
+export const MemorySource = z.object({
+    id: Id,
+    sessionId: Id.nullable(),
+    userMessageId: Id.nullable(),
+    answerMessageId: Id.nullable(),
+    itemId: Id.nullable(),
+    excerpt: z.string().nullable(),
+    createdAt: IsoDateTime,
+});
+export type MemorySource = z.infer<typeof MemorySource>;
+
+export const ConflictResolution = z.enum(['kept_a', 'kept_b', 'both_valid', 'dismissed']);
+export type ConflictResolution = z.infer<typeof ConflictResolution>;
+
+export const MemoryConflict = z.object({
+    id: Id,
+    kind: z.enum(['entity_value', 'semantic_contradiction']),
+    status: z.enum(['open', 'kept_a', 'kept_b', 'both_valid', 'dismissed']),
+    createdAt: IsoDateTime,
+    a: Memory,
+    b: Memory,
+});
+export type MemoryConflict = z.infer<typeof MemoryConflict>;
+
+export const ConflictResolveInput = z.object({ resolution: ConflictResolution });
+export type ConflictResolveInput = z.infer<typeof ConflictResolveInput>;
+
+/** 隔离区条目:raw 是已脱敏的原始输入。 */
+export const QuarantinedMemory = z.object({
+    id: Id,
+    sessionId: Id.nullable(),
+    reason: z.enum(['schema_invalid', 'secret_detected', 'low_confidence', 'untrusted_source', 'too_long']),
+    raw: z.unknown(),
+    createdAt: IsoDateTime,
+    expiresAt: IsoDateTime,
+});
+export type QuarantinedMemory = z.infer<typeof QuarantinedMemory>;
