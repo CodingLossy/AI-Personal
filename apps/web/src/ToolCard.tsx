@@ -2,6 +2,8 @@
 // Copyright (C) 2026 尹绪柏 (Theodore Yin)
 
 import type { KbSearchOutput } from '@ai-personal/shared';
+import { useState } from 'react';
+import { api, errorText } from './api.js';
 import { ApprovalActions } from './ApprovalActions.js';
 import { useI18n } from './i18n.js';
 import type { LiveTool } from './live-turn.js';
@@ -49,6 +51,9 @@ export function ToolCard({ tool, live = false }: { tool: LiveTool; live?: boolea
                 ) : (
                     <>
                         {tool.name === 'kb.search' ? <Citations output={tool.result.output} /> : null}
+                        {MEMORY_WRITE_TOOLS.includes(tool.name) ? (
+                            <RememberedNotice input={tool.input} output={tool.result.output} />
+                        ) : null}
                         <details>
                             <summary className="small muted">{t('tool.result')}</summary>
                             <pre>{show(tool.result.output)}</pre>
@@ -57,6 +62,45 @@ export function ToolCard({ tool, live = false }: { tool: LiveTool; live?: boolea
                 )
             ) : null}
         </div>
+    );
+}
+
+const MEMORY_WRITE_TOOLS = ['memory.write', 'memory.save'];
+
+/**
+ * 新写入的记忆(包括条件预授权直接写入的)显示「已记住:… [撤销]」,撤销即删除这条记忆(ADR 0010 第 4 节)。
+ * 只对新建的记忆提供撤销;合并或更替的撤销需要恢复旧值,放在记忆页处理。
+ */
+function RememberedNotice({ input, output }: { input: unknown; output: unknown }) {
+    const { t } = useI18n();
+    const [undone, setUndone] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const result = output as { outcome?: unknown; id?: unknown } | null;
+    const text = (input as { text?: unknown } | null)?.text;
+    if (result?.outcome !== 'created' || typeof result.id !== 'string' || typeof text !== 'string') return null;
+    const id = result.id;
+    const undo = async () => {
+        try {
+            await api.memory.delete(id);
+            setUndone(true);
+        } catch (e) {
+            setError(errorText(e));
+        }
+    };
+    return (
+        <p className="small remembered" data-testid="remembered">
+            {undone ? (
+                t('memory.undone')
+            ) : (
+                <>
+                    {t('memory.remembered', { text })}{' '}
+                    <button type="button" className="link small" onClick={() => void undo()}>
+                        {t('memory.undo')}
+                    </button>
+                </>
+            )}
+            {error ? <span className="error"> {error}</span> : null}
+        </p>
     );
 }
 
