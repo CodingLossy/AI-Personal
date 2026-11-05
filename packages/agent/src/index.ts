@@ -5,6 +5,7 @@ export { EventBus, type EventListener } from './bus.js';
 export { estimateTokens, planContext, SUMMARY_PREFIX, transcript } from './context.js';
 export {
     DEFAULT_APPROVAL_TIMEOUT_MS,
+    type FinishedTurn,
     MAX_TOOL_STEPS,
     RunConflictError,
     RunManager,

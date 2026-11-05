@@ -15,8 +15,12 @@ export const Settings = z.object({
     locale: Locale,
     theme: Theme,
     memory: z.object({
-        /** 自动从对话中抽取记忆;M1 不实现抽取,默认关闭(M2 决定默认值)。 */
+        /** 每轮结束后用 cheap 模型从用户消息与最终回答中抽取记忆;默认关闭(ADR 0007 第 5.1 节)。 */
         autoExtract: z.boolean(),
+        /** 自动抽取每天最多调用 cheap 模型的次数。自 M2 PR 11 起提供。 */
+        extractDailyLimit: z.number().int().min(0).max(1000),
+        /** memory.write 每次都要审批:关闭条件预授权(ADR 0010 第 4 节)。自 M2 PR 11 起提供。 */
+        alwaysApprove: z.boolean(),
     }),
     /** 本地知识库(ADR 0015)。自 M2 PR 9 起提供。 */
     knowledgeBase: z.object({
@@ -37,6 +41,6 @@ export const DEFAULT_SETTINGS: Settings = {
     defaultCheapProfileId: null,
     locale: 'zh-CN',
     theme: 'system',
-    memory: { autoExtract: false },
+    memory: { autoExtract: false, extractDailyLimit: 200, alwaysApprove: false },
     knowledgeBase: { chunkChars: 1000 },
 };

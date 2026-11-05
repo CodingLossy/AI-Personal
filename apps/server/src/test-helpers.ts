@@ -49,6 +49,8 @@ export interface TestServerOptions {
     approvalTimeoutMs?: number;
     /** web.fetch 的解析器与地址校验(测试中指向本机服务器)。 */
     webFetch?: WebFetchOptions;
+    /** 打开 memory.write 的条件预授权(与生产一致);默认关闭,审批流程的测试每次都会弹审批。 */
+    conditionalApprovals?: boolean;
 }
 
 export async function createTestServer(
@@ -89,6 +91,10 @@ export async function createTestServer(
         redact: (text) => redactor.redact(text),
         ...(options.approvalTimeoutMs ? { approvalTimeoutMs: options.approvalTimeoutMs } : {}),
         summarize: createSummarizer(repos, providerFor),
+        // 审批流程的测试默认关闭条件预授权;conditionalApprovals 时与生产一致,按设置决定
+        disableConditional: options.conditionalApprovals
+            ? (ownerId) => repos.settings.get(ownerId).memory.alwaysApprove
+            : () => true,
     });
     // MCP 子进程在 cleanup 时关闭
     const mcp = createMcpControl(runs.tools);

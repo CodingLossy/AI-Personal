@@ -5296,10 +5296,20 @@
                       "properties": {
                         "autoExtract": {
                           "type": "boolean"
+                        },
+                        "extractDailyLimit": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 1000
+                        },
+                        "alwaysApprove": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
-                        "autoExtract"
+                        "autoExtract",
+                        "extractDailyLimit",
+                        "alwaysApprove"
                       ]
                     },
                     "knowledgeBase": {
@@ -5568,6 +5578,14 @@
                     "properties": {
                       "autoExtract": {
                         "type": "boolean"
+                      },
+                      "extractDailyLimit": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000
+                      },
+                      "alwaysApprove": {
+                        "type": "boolean"
                       }
                     }
                   },
@@ -5628,10 +5646,20 @@
                       "properties": {
                         "autoExtract": {
                           "type": "boolean"
+                        },
+                        "extractDailyLimit": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 1000
+                        },
+                        "alwaysApprove": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
-                        "autoExtract"
+                        "autoExtract",
+                        "extractDailyLimit",
+                        "alwaysApprove"
                       ]
                     },
                     "knowledgeBase": {

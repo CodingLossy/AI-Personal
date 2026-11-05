@@ -37,6 +37,13 @@ All notable user-visible changes are listed here. The format follows [Keep a Cha
 - **Embeddings and vector index** (ADR 0014): OpenAI-compatible profiles with the `embed` purpose can now embed text through `/embeddings`. Vectors are stored with sqlite-vec in a table sized to the profile's dimensions, and are removed together with their items. A background queue embeds one batch at a time, retries with backoff and stops at a daily limit (5,000 texts by default). If you change the embedding model or its dimensions, Settings → Vector index asks you to rebuild. `GET /embeddings/status` and `POST /embeddings/rebuild` are new. sqlite-vec is only loaded when an embed profile exists or a vector index was built before. The knowledge base and memory search will use this in later PRs.
 - **Local knowledge base** (ADR 0015): Markdown, text, PDF, DOCX and XLSX files in your authorized folders are split into chunks by heading and paragraph, keeping PDF page numbers. You can set the chunk size in Settings (default 1,000 characters). Chunks are embedded when an embed profile exists. The new `kb.search` tool (read) uses vector search and falls back to full-text search. It returns numbered passages with the file name and page, and the Web UI shows them as citations. Indexing is incremental, and deleting a file or revoking a folder removes its chunks and vectors.
 - **Memory v2 groundwork** (ADR 0007 §5): the database is migrated to the memory v2 schema without rebuilding M1 tables, and the database is backed up first. Existing memories keep their text. They now appear in the knowledge map as Memory → domain → type, with replaced values under a hidden "History" folder and linked to the value that replaced them. New contract types for memory v2 and the `memory-used` event are added; the behaviour of `memory.save` / `memory.search` does not change yet.
+- **Memory write path** (ADR 0007 §5.5):
+  - credentials (API keys, tokens, JWTs, private keys, passwords, connection strings, TOTP seeds, high-entropy strings) are refused before anything is stored;
+  - bank card numbers, ID numbers, mobile numbers and detailed addresses are replaced with placeholders before a memory is saved;
+  - entity keys are normalized; repeated facts are merged; a new value for a single-value key replaces the old one, or both are marked as conflicting when the new value is less certain;
+  - invalid, overlong or instruction-like content from outside sources goes to a quarantine for 14 days instead of memory.
+- New tool `memory.write` (`memory.save` is now its alias). It saves without asking when your own message triggered it, nothing sensitive is involved and no profile fact is replaced; otherwise it asks for approval. Settings: `memory.alwaysApprove` asks every time.
+- Automatic memory extraction after each turn (off by default; `memory.autoExtract`, at most `memory.extractDailyLimit` = 200 cheap-model calls per day). It only reads your message and the final answer, never tool output; after a turn that read outside content it only proposes memories into the quarantine.
 
 #### Changed
 
@@ -107,6 +114,13 @@ All notable user-visible changes are listed here. The format follows [Keep a Cha
 - **嵌入与向量索引**(ADR 0014):带 `embed` 用途的 OpenAI 兼容配置档现在可以通过 `/embeddings` 嵌入文本。向量用 sqlite-vec 保存,表的维度取自配置档,条目删除时向量一并删除。后台队列每次处理一批,失败后退避重试,到达每日上限(默认 5,000 条)后停止。更换嵌入模型或维度后,「设置 → 向量索引」会提示重建。新增 `GET /embeddings/status` 与 `POST /embeddings/rebuild`。只有存在 embed 配置档或以前建过向量索引时才加载 sqlite-vec。知识库与记忆检索会在后续 PR 中使用它。
 - **本地知识库**(ADR 0015):授权目录中的 Markdown、文本、PDF、DOCX、XLSX 按标题与段落分块,并保留 PDF 页码。块大小可在设置中调整(默认 1,000 字符)。存在 embed 配置档时分块会被嵌入。新工具 `kb.search`(read)优先用向量检索,没有向量时退回全文检索;它返回带文件名与页码的编号片段,Web 中显示为引用。索引是增量的;删除文件或撤销授权目录后,它的分块与向量会被清理。
 - **记忆 v2 基础**(ADR 0007 第 5 节):数据库迁移到记忆 v2 的结构,不重建 M1 的表,迁移前自动备份。已有记忆的正文不变,并出现在知识地图中:「记忆 → 域 → 类型」,被更替的旧值放在隐藏的「历史版本」下,并链接到更替它的新值。新增记忆 v2 的契约类型与 `memory-used` 事件;`memory.save` / `memory.search` 的行为暂时不变。
+- **记忆写入路径**(ADR 0007 第 5.5 节):
+  - 凭据(API key、令牌、JWT、私钥、密码、连接串、TOTP 种子、高熵串)在落库前一律拒存;
+  - 银行卡号、身份证号、手机号与详细住址在写入前替换为占位文字;
+  - entity_key 规范化;重复的事实合并;单值键的新值更替旧值,新值把握不够时两条都标为冲突;
+  - 来自外部、不合法、过长或像指令的内容进隔离区(保留 14 天),不进记忆。
+- 新工具 `memory.write`(`memory.save` 成为它的别名):由你本人的消息触发、不涉及敏感内容、不更替画像事实时直接写入,其余情况需要审批;设置 `memory.alwaysApprove` 可改为每次都审批。
+- 每轮结束后的自动抽取(默认关闭;`memory.autoExtract`,每天最多 `memory.extractDailyLimit` = 200 次 cheap 模型调用):只读你的消息和最终回答,不读工具输出;读过外部内容的那一轮只把建议放进隔离区。
 - 服务器重启时尚未处理的审批请求会过期,不再悄悄丢失。
 
 ### M1 · 对话核心(2026-11-04)

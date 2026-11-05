@@ -12,7 +12,7 @@ import {
     type Memory,
 } from '@ai-personal/shared';
 import type { QuarantineReason, Repositories } from '@ai-personal/storage';
-import { normalizeEntityKey } from './entity-keys.js';
+import { isProfileKey, normalizeEntityKey } from './entity-keys.js';
 import { looksLikeInstruction } from './instructions.js';
 import { detectCredentialIn } from './secrets.js';
 import { redactSensitive, redactSensitiveIn } from './sensitive.js';
@@ -66,6 +66,8 @@ export interface WriteContext {
     untrusted?: boolean | undefined;
     /** 隔离区条目所属的会话。 */
     sessionId?: string | undefined;
+    /** 通过检查后也不写入,而是放进隔离区等用户确认(本轮出现过外部内容时的自动抽取)。 */
+    proposeOnly?: boolean | undefined;
 }
 
 /** 文本超过 200 字时的隔离原因;其余校验失败为 schema_invalid。 */
@@ -77,6 +79,12 @@ export interface MemoryService {
      * entity_key 规范化 → 去重 / 更替 / 冲突。输入来自模型时也可以直接传入,不必先校验。
      */
     write(ownerId: string, input: unknown, context: WriteContext): MemoryWriteResult;
+    /**
+     * memory.write 的条件预授权(ADR 0010 第 4 节,业主决定 4):只看 core 能算出的事实。
+     * 输入合法、不含凭据、sensitivity 为 0,而且不会更替已有的单值画像事实(user.* / pref.*)时为 true。
+     * 「本轮输入来自主人的直接消息」由审批策略用 untrustedContentSeen 判断。
+     */
+    canWriteWithoutApproval(ownerId: string, input: unknown): boolean;
     /** M1 的写入接口,等同于 write(ownerId, input, { origin })。 */
     save(ownerId: string, input: MemorySaveInput, origin: Memory['origin']): MemorySaveResult;
     search(ownerId: string, input: MemorySearchInput): MemorySearchResult;
@@ -120,6 +128,8 @@ export function createMemoryService(repos: Repositories): MemoryService {
             if ((context.untrusted || context.origin === 'extracted') && looksLikeInstruction(input.text)) {
                 return quarantine('untrusted_source', input);
             }
+            // 只提议不写入:等用户在隔离区确认(外部内容只能由模型提议,补充设计第 3 节第 1 条)
+            if (context.proposeOnly) return quarantine('untrusted_source', input);
 
             // 敏感片段在落库前替换,原文不进入记忆表、FTS 与向量
             const text = redactSensitive(input.text);
@@ -141,6 +151,17 @@ export function createMemoryService(repos: Repositories): MemoryService {
                 decisionState: input.decisionState ?? null,
                 ...(input.source ? { source: input.source } : {}),
             });
+        },
+        canWriteWithoutApproval(ownerId, rawInput) {
+            if (detectCredentialIn(contentOf(rawInput))) return false;
+            const parsed = MemoryWriteInputSchema.safeParse(withNormalizedKey(rawInput));
+            if (!parsed.success) return false;
+            const input = parsed.data;
+            if (redactSensitive(input.text).sensitivity > 0) return false;
+            if (input.value && redactSensitiveIn(input.value).sensitivity > 0) return false;
+            const key = input.entityKey ? normalizeEntityKey(input.entityKey) : null;
+            if (key && isProfileKey(key.key) && repos.memories.activeFor(ownerId, key.key)) return false;
+            return true;
         },
         save(ownerId, input, origin) {
             return this.write(ownerId, input, { origin });

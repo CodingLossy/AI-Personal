@@ -235,6 +235,13 @@ export function createMemoryRepository(conn: Connection, now: () => Date, items:
              FROM memory_quarantine WHERE owner_id = ? AND expires_at > ? ORDER BY created_at DESC, id DESC`,
         ),
         purgeQuarantine: sqlite.prepare('DELETE FROM memory_quarantine WHERE expires_at <= ?'),
+        jobState: sqlite.prepare<[string, string], { stateJson: string | null }>(
+            'SELECT state_json AS stateJson FROM jobs_state WHERE owner_id = ? AND job = ?',
+        ),
+        upsertJobState: sqlite.prepare(
+            `INSERT INTO jobs_state (owner_id, job, last_run_at, state_json) VALUES (?, ?, ?, ?)
+             ON CONFLICT (owner_id, job) DO UPDATE SET last_run_at = excluded.last_run_at, state_json = excluded.state_json`,
+        ),
         insertSource: sqlite.prepare(
             `INSERT INTO memory_sources (id, memory_id, session_id, user_message_id, answer_message_id, source_item_id, created_at)
              VALUES (@id, @memoryId, @sessionId, @userMessageId, @answerMessageId, @itemId, @at)`,
@@ -402,6 +409,11 @@ export function createMemoryRepository(conn: Connection, now: () => Date, items:
             q.setDecision.run(next, iso(), id);
             return 'ok';
         },
+        /** 单值键当前的 active 记录。 */
+        activeFor(ownerId: string, entityKey: string): Memory | null {
+            const row = q.activeSingle.get(ownerId, entityKey);
+            return row ? toMemory(row) : null;
+        },
         decisionState(ownerId: string, id: string): DecisionState | null {
             return q.get.get(ownerId, id)?.decisionState ?? null;
         },
@@ -436,6 +448,22 @@ export function createMemoryRepository(conn: Connection, now: () => Date, items:
                 ...rest,
                 raw: JSON.parse(rawJson) as unknown,
             }));
+        },
+        /**
+         * 每日配额:当天(UTC)已用次数小于 limit 时占用一次并返回 true,否则返回 false。
+         * 计数存在 jobs_state 中(例如自动抽取的每日 cheap 模型调用上限)。
+         */
+        takeDailySlot(ownerId: string, job: string, limit: number): boolean {
+            return sqlite.transaction(() => {
+                const at = iso();
+                const day = at.slice(0, 10);
+                const row = q.jobState.get(ownerId, job);
+                const state = row?.stateJson ? (JSON.parse(row.stateJson) as { day?: string; count?: number }) : {};
+                const count = state.day === day ? (state.count ?? 0) : 0;
+                if (count >= limit) return false;
+                q.upsertJobState.run(ownerId, job, at, JSON.stringify({ day, count: count + 1 }));
+                return true;
+            })();
         },
         /** 删除所有已过期的隔离区条目,返回删除的条数(维护任务调用)。 */
         purgeQuarantine(): number {
