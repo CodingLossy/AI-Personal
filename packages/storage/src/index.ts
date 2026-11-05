@@ -10,7 +10,15 @@ export type { AccessTokenRecord, AuthSessionRecord } from './auth.js';
 export { encodeCursor, decodeCursor, InvalidCursorError, type Page } from './cursor.js';
 export { applyPragmas, assertForeignKeysOn, openDatabase, StorageError, type Connection, type Sqlite } from './db.js';
 export { newId } from './ids.js';
-export type { NewMemory, SessionSummary } from './memory.js';
+export { dedupKey, QUARANTINE_TTL_DAYS } from './memory.js';
+export type {
+    MemoryConflict,
+    NewMemory,
+    QuarantineEntry,
+    QuarantineReason,
+    SaveOutcome,
+    SessionSummary,
+} from './memory.js';
 export type { ModelProfileRecord } from './profiles.js';
 export type { NewApprovalRequest, NewAuditEntry } from './tools.js';
 export {
