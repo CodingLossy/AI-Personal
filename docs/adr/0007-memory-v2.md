@@ -125,3 +125,17 @@ CREATE INDEX idx_mem_lookup ON memory_facts(owner_id, status, mem_type);
 - `Memory` 增加 `tier`、`importance`、`pinned`、`supersedesId`、`lastConfirmedAt`(响应中的新增字段,向后兼容)。
 - 新的 AgentEvent `memory-used { runId, ids }`(PR 12 起发送;客户端须忽略未知事件,ADR 0004)。
 - 兼容:`memory.save` / `memory.search` 保留为 `memory.write` / `memory.retrieve` 的别名;`POST /memory/search` 与 `recall()`(#13)行为不变。`MemorySaveInput` / `MemorySaveResult` 保留,`MemoryWriteInput` 在其基础上增加字段。
+
+### 5.5 写入路径(M2 PR 11)
+
+- **凭据检测**是 `packages/memory/src/secrets.ts` 中不依赖任何包的纯函数 `detectCredential`,也以 `@ai-personal/memory/secrets` 单独导出,供日志、审批卡片等复用。规则覆盖补充设计第 3 节,另加 URL 中的用户名密码、Stripe / Hugging Face / GitLab 前缀与 HTTP Bearer。语料在 `packages/memory/src/fixtures/credential-corpus.ts`(≥ 60 正例、≥ 60 反例);其中的假密钥在运行时拼出,仓库里没有完整的密钥串。凭据检测针对除 `source` 以外的所有输入字段(`source` 里是 core 填的 ULID)。
+- **脱敏**(`sensitive.ts`):Luhn 银行卡号、校验位正确的 18 位身份证号、手机号、详细住址替换为占位文字,sensitivity = 2;生日、家庭成员只标记 sensitivity = 1。病历类关键词暂不处理。
+- **entity_key 注册表**(`entity-keys.ts`)含别名(如 `user.city` → `user.location.city`)与键族 `project.<slug>.status|license|stack`、`person.<slug>.relation`;不在表中的键归一为 `x.<key>`,默认 multi。M1 中已存的未登记 `user.*` 键不改。
+- **去重**只用 FTS:按词(≥ 3 字符)取同类型 active 记忆为候选,再比较「小写并去掉空白、标点」后的文本;没有可用的词时退回全文相等。
+- **更替与冲突**:单值键已有 active 时,值相同(`value` 相等,或规范文本相等)→ 合并;新值 `origin = user_explicit`,或置信度 ≥ 旧值 − 0.1 → 更替(旧值同时设 `valid_to`,决策设为 `superseded`);否则两条都标 `conflicted` 并写 `memory_conflicts(kind = 'entity_value')`。冲突中的键再收到用户明说的新值时直接新建 active,冲突由 PR 14 的冲突列表处理。
+- **决策**:`subtype = 'decision'` 的记忆默认 `proposed`;仓储的 `setDecisionState` 只允许补充设计第 3 节第 6 条的迁移。
+- **隔离区**:校验失败(`schema_invalid`)、超过 200 字(`too_long`)、来自不可信来源或自动抽取的指令性语句(`untrusted_source`)进 `memory_quarantine`,原始输入先脱敏,保留 14 天。凭据不进隔离区,直接拒存。
+- **memory.write 的条件预授权**:`MemoryService.canWriteWithoutApproval` 只看 core 能算出的事实(输入合法、无凭据、sensitivity = 0、不会更替已有的 `user.*` / `pref.*` 单值事实);「本轮来自主人的直接消息」由审批策略的 `untrustedContentSeen` 判断(M2 还没有 IM 渠道)。本轮出现过外部内容时写入一定经过审批,记为 `origin = manual`,并按不可信来源检测指令。
+- **设置**(`packages/shared` 的增量字段):`memory.alwaysApprove`(默认 false,打开后关闭条件预授权)、`memory.extractDailyLimit`(0–1000,默认 200)。
+- **自动抽取**:`RunManager` 新增 `onTurnFinished` 回调(一轮正常结束后调用);抽取器只把用户消息与助手消息的最后一段文本交给 cheap 模型,每轮最多 3 条,每日配额记在 `jobs_state(job = 'memory.extract')`(按 UTC 日期)。本轮出现过外部内容时,抽取结果只进隔离区(`untrusted_source`),等用户在 PR 14 的隔离区中确认。
+- 写入后的「已记住:… [撤销]」提示属于 Web UI,放在 PR 14;撤销即 `DELETE /memory/{id}`。

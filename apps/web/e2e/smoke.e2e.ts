@@ -154,30 +154,51 @@ test('初始化、配置档、流式中刷新、审批与记忆管理', async ({
     });
     await expect(page.getByTestId('live')).toHaveCount(0);
 
-    // memory.save:拒绝后不写入
+    // memory.save:普通信息按条件预授权直接写入,并显示可撤销提示;撤销即删除(ADR 0010 第 4 节)
     enqueue('memory-save-roundtrip');
     await composer.fill('记住我住杭州');
     await composer.press('Enter');
-    await page.getByRole('button', { name: '拒绝' }).click();
-    await expect(page.locator('.message.assistant').last()).toContainText('好的,我记住了。');
+    const remembered = page.getByTestId('remembered').last();
+    await expect(remembered).toContainText('已记住:用户常住杭州');
+    await expect(page.getByRole('button', { name: '拒绝' })).toHaveCount(0);
+    await remembered.getByRole('button', { name: '撤销' }).click();
+    await expect(remembered).toHaveText('已撤销这条记忆');
     await page.getByRole('link', { name: '记忆' }).click();
     await expect(page.getByText('还没有记忆。')).toBeVisible();
 
-    // memory.save:批准后写入
+    // 再写一次,保留下来
     await page.getByRole('link', { name: '新对话' }).click();
     enqueue('memory-save-roundtrip');
     await composer.fill('记住我住杭州');
     await composer.press('Enter');
+    await expect(page.getByTestId('remembered').last()).toContainText('已记住:用户常住杭州');
+
+    // 更替已有的画像事实需要审批:拒绝后不写入,原值不变
+    await page.getByRole('link', { name: '新对话' }).click();
+    enqueue('memory-save-supersede');
+    await composer.fill('我搬到上海了');
+    await composer.press('Enter');
+    await page.getByRole('button', { name: '拒绝' }).click();
+    await expect(page.locator('.message.assistant').last()).toContainText('好的,已更新。');
+    await page.getByRole('link', { name: '记忆' }).click();
+    await expect(page.locator('.memory')).toHaveCount(1);
+    await expect(page.locator('.memory')).toContainText('用户常住杭州');
+
+    // 批准后更替
+    await page.getByRole('link', { name: '新对话' }).click();
+    enqueue('memory-save-supersede');
+    await composer.fill('我搬到上海了');
+    await composer.press('Enter');
     // 批准时选择「总是允许」:之后可以在设置中看到并撤销(ADR 0010 第 3 节)
     await page.getByRole('combobox', { name: '记住这个决定' }).selectOption('always');
     await page.getByRole('button', { name: '批准' }).click();
-    await expect(page.locator('.message.assistant').last()).toContainText('好的,我记住了。');
+    await expect(page.locator('.message.assistant').last()).toContainText('好的,已更新。');
 
-    // 记忆页:查看、编辑、删除
+    // 记忆页:只看到新值;编辑、删除
     await page.getByRole('link', { name: '记忆' }).click();
     const item = page.locator('.memory');
     await expect(item).toHaveCount(1);
-    await expect(item).toContainText('用户常住杭州');
+    await expect(item).toContainText('用户搬到了上海');
     await item.getByRole('button', { name: '编辑' }).click();
     await item.getByRole('textbox').fill('用户常住杭州西湖区');
     await item.getByRole('button', { name: '保存' }).click();
@@ -185,9 +206,9 @@ test('初始化、配置档、流式中刷新、审批与记忆管理', async ({
     await page.locator('.memory').getByRole('button', { name: '删除' }).click();
     await expect(page.getByText('还没有记忆。')).toBeVisible();
 
-    // 审计页:拒绝、批准与新增预授权都有记录
+    // 审计页:两次条件预授权写入、拒绝、批准与新增预授权都有记录
     await page.getByRole('link', { name: '审计' }).click();
-    await expect(page.locator('.audit-table tbody tr')).toHaveCount(3);
+    await expect(page.locator('.audit-table tbody tr')).toHaveCount(5);
     await expect(page.locator('.audit-table')).toContainText('已拒绝');
     await expect(page.locator('.audit-table')).toContainText('新增预授权');
 

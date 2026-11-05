@@ -195,6 +195,50 @@ describe('memory.save 审批流程(验收:记住我住杭州 → 新会话问我
     });
 });
 
+describe('memory.write 的条件预授权(业主决定 4)', () => {
+    /** 运行一轮:模型调用一次 memory.write 再回答;返回是否弹出了审批(弹出时直接批准)和工具结果。 */
+    async function runWrite(ctx: Awaited<ReturnType<typeof setup>>, input: unknown) {
+        const session = await ctx.newSession();
+        ctx.fake.steps.push(callTool('memory.write', input), answer('好的'));
+        let asked = false;
+        const events = await readSse(
+            await ctx.post(`/api/v1/sessions/${session.id}/messages`, { text: '记住' }),
+            async (e) => {
+                if (e.event.type !== 'approval-required') return;
+                asked = true;
+                await ctx.post(`/api/v1/approvals/${e.event.callId}`, { decision: 'approve' });
+            },
+        );
+        const result = events.find((e) => e.event.type === 'tool-result')!.event as { output: { outcome: string } };
+        return { asked, outcome: result.output.outcome };
+    }
+
+    it('普通事实直接写入并记为 conditional;敏感、更替画像、打开「每次都要审批」时需要审批', async () => {
+        const ctx = await setup({ conditionalApprovals: true });
+        expect(await runWrite(ctx, { text: '用户喜欢喝龙井' })).toEqual({ asked: false, outcome: 'created' });
+        const audit = (await (await ctx.req('/api/v1/audit?toolName=memory.write&limit=1')).json()) as {
+            items: { decision: string }[];
+        };
+        expect(audit.items[0]?.decision).toBe('conditional');
+
+        // 第一次写单值画像事实:没有旧值可更替,直接写入
+        expect(await runWrite(ctx, { text: '用户住在杭州', entityKey: 'user.location.city' })).toEqual({
+            asked: false,
+            outcome: 'created',
+        });
+        // 更替已有的画像事实
+        expect(await runWrite(ctx, { text: '用户搬到了上海', entityKey: 'user.location.city' })).toEqual({
+            asked: true,
+            outcome: 'superseded',
+        });
+        // sensitivity 1(家庭成员、生日)
+        expect((await runWrite(ctx, { text: '我妈妈的生日是 5 月 3 日' })).asked).toBe(true);
+
+        await ctx.req('/api/v1/settings', { method: 'PUT', body: JSON.stringify({ memory: { alwaysApprove: true } }) });
+        expect(await runWrite(ctx, { text: '用户喜欢爬山' })).toEqual({ asked: true, outcome: 'created' });
+    });
+});
+
 describe('评测:真实 OpenAI 兼容 provider 回放 memory.save 往返', () => {
     it('工具名映射、审批、工具结果交回模型', async () => {
         const replay = createReplayFetch(loadFixture(`${FIXTURES}memory-save-roundtrip.json`));
@@ -215,6 +259,7 @@ describe('评测:真实 OpenAI 兼容 provider 回放 memory.save 往返', () =>
 
         const first = replay.calls[0]!.body as { tools: { function: { name: string } }[] };
         expect(first.tools.map((t) => t.function.name)).toEqual([
+            'memory__write',
             'memory__save',
             'memory__search',
             'time',

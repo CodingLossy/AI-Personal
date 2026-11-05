@@ -9,7 +9,7 @@ import { createItemService, createKnowledgeBase } from '@ai-personal/items';
 import { createMemoryService } from '@ai-personal/memory';
 import { createProvider, Redactor, SecretStore } from '@ai-personal/providers';
 import { createRepositories, openStorage } from '@ai-personal/storage';
-import { createSummarizer, createToolRegistry } from './agent-setup.js';
+import { createSummarizer, createToolRegistry, createTurnExtractor } from './agent-setup.js';
 import { createApp } from './app.js';
 import { createMcpControl } from './mcp-setup.js';
 import { createEmbeddingService } from './embeddings.js';
@@ -72,6 +72,11 @@ const runs = new RunManager({
     tools: createToolRegistry(memory, repos, items, kb),
     redact: (text) => redactor.redact(text),
     summarize: createSummarizer(repos, providerFor),
+    // 设置中「memory.write 每次都要审批」关闭条件预授权(ADR 0010 第 4 节)
+    disableConditional: (ownerId) => repos.settings.get(ownerId).memory.alwaysApprove,
+    onTurnFinished: createTurnExtractor(repos, memory, providerFor, (err, { runId }) =>
+        logger.warn({ err, runId }, 'memory extraction failed'),
+    ),
     onError: (err, { runId }) => logger.error({ err, runId }, 'run failed unexpectedly'),
 });
 const interrupted = runs.recoverInterrupted();

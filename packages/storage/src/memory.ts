@@ -3,7 +3,7 @@
 
 // 记忆 v1(ADR 0007 的 M1 子集):每条记忆是一个 items 行(source='memory')加一个 memory_facts 行。
 // 检索用 items_fts(trigram);少于 3 个字符的查询 trigram 无法命中,回退为 LIKE。
-import type { Memory } from '@ai-personal/shared';
+import type { DecisionState, Memory } from '@ai-personal/shared';
 import type { Connection } from './db.js';
 import { newId } from './ids.js';
 import type { ItemRepository } from './items.js';
@@ -19,6 +19,10 @@ export interface NewMemory {
     sensitivity: number;
     confidence: number;
     origin: Memory['origin'];
+    importance?: number | undefined;
+    validFrom?: string | null | undefined;
+    /** 只对 subtype = 'decision' 有意义;决策默认为 proposed。 */
+    decisionState?: Exclude<DecisionState, 'superseded'> | null | undefined;
     source?: {
         sessionId?: string | undefined;
         userMessageId?: string | undefined;
@@ -44,14 +48,63 @@ interface Row {
     importance: number;
     pinned: number;
     supersedesId: string | null;
+    decisionState: DecisionState | null;
     lastConfirmedAt: string | null;
     createdAt: string;
     updatedAt: string;
 }
 
+export type SaveOutcome =
+    | { outcome: 'created' | 'merged'; id: string }
+    | { outcome: 'superseded'; id: string; supersededId: string }
+    | { outcome: 'conflicted'; id: string; conflictId: string };
+
+export type QuarantineReason =
+    'schema_invalid' | 'secret_detected' | 'low_confidence' | 'untrusted_source' | 'too_long';
+
+export interface QuarantineEntry {
+    id: string;
+    sessionId: string | null;
+    raw: unknown;
+    reason: QuarantineReason;
+    createdAt: string;
+    expiresAt: string;
+}
+
+export interface MemoryConflict {
+    id: string;
+    aId: string;
+    bId: string;
+    kind: 'entity_value' | 'semantic_contradiction';
+    status: 'open' | 'kept_a' | 'kept_b' | 'both_valid' | 'dismissed';
+    createdAt: string;
+}
+
+/** 决策生命周期:proposed → accepted | rejected,accepted → done;任何状态都可以 → superseded(补充设计第 3 节第 6 条)。 */
+const DECISION_NEXT: Readonly<Record<DecisionState, readonly DecisionState[]>> = {
+    proposed: ['accepted', 'rejected'],
+    accepted: ['done'],
+    rejected: [],
+    done: [],
+    superseded: [],
+};
+
+/** 隔离区条目默认保留 14 天(补充设计第 2.2 节)。 */
+export const QUARANTINE_TTL_DAYS = 14;
+const QUARANTINE_MAX_RAW = 4000;
+
+/** 更替的门槛:新值不是用户明说时,置信度不能比旧值低 0.1 以上,否则记为冲突(补充设计第 3 节第 5 条)。 */
+const SUPERSEDE_MARGIN = 0.1;
+
+/** 去重用的规范文本:小写,去掉空白、标点与符号。 */
+export function dedupKey(text: string): string {
+    return text.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, '');
+}
+
 const SELECT = `SELECT f.item_id AS id, i.summary AS text, f.mem_type AS memType, f.subtype, f.entity_key AS entityKey,
         f.cardinality, f.value_json AS valueJson, f.status, f.domain, f.sensitivity, f.confidence, f.origin,
-        f.tier, f.importance, f.pinned, f.supersedes_id AS supersedesId, f.last_confirmed_at AS lastConfirmedAt,
+        f.tier, f.importance, f.pinned, f.supersedes_id AS supersedesId, f.decision_state AS decisionState,
+        f.last_confirmed_at AS lastConfirmedAt,
         f.created_at AS createdAt, f.updated_at AS updatedAt
     FROM memory_facts f JOIN items i ON i.id = f.item_id`;
 
@@ -148,9 +201,46 @@ export function createMemoryRepository(conn: Connection, now: () => Date, items:
         ),
         insertFact: sqlite.prepare(
             `INSERT INTO memory_facts (item_id, owner_id, mem_type, subtype, entity_key, cardinality, value_json, status,
-                                       domain, sensitivity, confidence, origin, created_at, updated_at)
-             VALUES (@id, @ownerId, @memType, @subtype, @entityKey, @cardinality, @valueJson, 'active',
-                     @domain, @sensitivity, @confidence, @origin, @at, @at)`,
+                                       decision_state, domain, sensitivity, confidence, importance, origin, valid_from,
+                                       created_at, updated_at)
+             VALUES (@id, @ownerId, @memType, @subtype, @entityKey, @cardinality, @valueJson, @status,
+                     @decisionState, @domain, @sensitivity, @confidence, @importance, @origin, @validFrom, @at, @at)`,
+        ),
+        dupFts: sqlite.prepare<[string, string, string, number], Row>(
+            `${SELECT} JOIN items_fts ON items_fts.rowid = i.rowid
+             WHERE items_fts MATCH ? AND f.owner_id = ? AND f.mem_type = ? AND f.status = 'active'
+               AND i.deleted_at IS NULL LIMIT ?`,
+        ),
+        supersede: sqlite.prepare(
+            `UPDATE memory_facts SET status = 'superseded', valid_to = @at, updated_at = @at,
+                    decision_state = CASE WHEN decision_state IS NULL THEN NULL ELSE 'superseded' END
+             WHERE item_id = @id`,
+        ),
+        setDecision: sqlite.prepare('UPDATE memory_facts SET decision_state = ?, updated_at = ? WHERE item_id = ?'),
+        insertConflict: sqlite.prepare(
+            `INSERT INTO memory_conflicts (id, owner_id, a_id, b_id, kind, status, created_at)
+             VALUES (?, ?, ?, ?, 'entity_value', 'open', ?)`,
+        ),
+        listConflicts: sqlite.prepare<[string, string], MemoryConflict>(
+            `SELECT id, a_id AS aId, b_id AS bId, kind, status, created_at AS createdAt FROM memory_conflicts
+             WHERE owner_id = ? AND status = ? ORDER BY created_at DESC, id DESC`,
+        ),
+        insertQuarantine: sqlite.prepare(
+            `INSERT INTO memory_quarantine (id, owner_id, session_id, raw_json, reason, created_at, expires_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        ),
+        listQuarantine: sqlite.prepare<[string, string], Omit<QuarantineEntry, 'raw'> & { rawJson: string }>(
+            `SELECT id, session_id AS sessionId, raw_json AS rawJson, reason, created_at AS createdAt,
+                    expires_at AS expiresAt
+             FROM memory_quarantine WHERE owner_id = ? AND expires_at > ? ORDER BY created_at DESC, id DESC`,
+        ),
+        purgeQuarantine: sqlite.prepare('DELETE FROM memory_quarantine WHERE expires_at <= ?'),
+        jobState: sqlite.prepare<[string, string], { stateJson: string | null }>(
+            'SELECT state_json AS stateJson FROM jobs_state WHERE owner_id = ? AND job = ?',
+        ),
+        upsertJobState: sqlite.prepare(
+            `INSERT INTO jobs_state (owner_id, job, last_run_at, state_json) VALUES (?, ?, ?, ?)
+             ON CONFLICT (owner_id, job) DO UPDATE SET last_run_at = excluded.last_run_at, state_json = excluded.state_json`,
         ),
         insertSource: sqlite.prepare(
             `INSERT INTO memory_sources (id, memory_id, session_id, user_message_id, answer_message_id, source_item_id, created_at)
@@ -190,7 +280,49 @@ export function createMemoryRepository(conn: Connection, now: () => Date, items:
         ),
     };
 
-    function insert(ownerId: string, input: NewMemory): string {
+    function addSource(memoryId: string, source: NewMemory['source'], at: string): void {
+        if (!source) return;
+        q.insertSource.run({
+            id: newId(now()),
+            memoryId,
+            sessionId: source.sessionId ?? null,
+            userMessageId: source.userMessageId ?? null,
+            answerMessageId: source.answerMessageId ?? null,
+            itemId: source.itemId ?? null,
+            at,
+        });
+    }
+
+    /** 去重确认:追加来源,置信度 +0.05(上限 0.99),更新 last_confirmed_at。 */
+    function merge(id: string, input: NewMemory): SaveOutcome {
+        const at = iso();
+        q.confirm.run(at, id);
+        q.confirmedAt.run(at, id);
+        addSource(id, input.source, at);
+        return { outcome: 'merged', id };
+    }
+
+    /** 同类型的 active 记忆中找同一条:先用 FTS 取候选,再比较规范文本(补充设计第 3 节第 4 条,只用 FTS)。 */
+    function findDuplicate(ownerId: string, input: NewMemory): Row | undefined {
+        const key = dedupKey(input.text);
+        const words = input.text
+            .replace(/[\p{P}\p{S}]+/gu, ' ')
+            .split(/\s+/)
+            .filter((w) => w.length >= MIN_TRIGRAM_QUERY);
+        const candidates = words.length
+            ? q.dupFts.all(words.map((w) => `"${w.replace(/"/g, '""')}"`).join(' '), ownerId, input.memType, 10)
+            : [];
+        const exact = q.sameText.get(ownerId, input.memType, input.text);
+        if (exact) candidates.push(exact);
+        return candidates.find((c) => dedupKey(c.text) === key);
+    }
+
+    function sameValue(old: Row, input: NewMemory): boolean {
+        if (old.valueJson !== null && input.value !== null) return old.valueJson === JSON.stringify(input.value);
+        return dedupKey(old.text) === dedupKey(input.text);
+    }
+
+    function insert(ownerId: string, input: NewMemory, status: 'active' | 'conflicted' = 'active'): string {
         const id = newId(now());
         const at = iso();
         q.insertItem.run({
@@ -209,23 +341,17 @@ export function createMemoryRepository(conn: Connection, now: () => Date, items:
             entityKey: input.entityKey,
             cardinality: input.cardinality,
             valueJson: input.value === null ? null : JSON.stringify(input.value),
+            status,
+            decisionState: input.subtype === 'decision' ? (input.decisionState ?? 'proposed') : null,
             domain: input.domain,
             sensitivity: input.sensitivity,
             confidence: input.confidence,
+            importance: input.importance ?? 0.5,
             origin: input.origin,
+            validFrom: input.validFrom ?? null,
             at,
         });
-        if (input.source) {
-            q.insertSource.run({
-                id: newId(now()),
-                memoryId: id,
-                sessionId: input.source.sessionId ?? null,
-                userMessageId: input.source.userMessageId ?? null,
-                answerMessageId: input.source.answerMessageId ?? null,
-                itemId: input.source.itemId ?? null,
-                at,
-            });
-        }
+        addSource(id, input.source, at);
         q.confirmedAt.run(at, id);
         items.attach(ownerId, id, parentFor(ownerId, { ...input, superseded: false }));
         return id;
@@ -233,38 +359,115 @@ export function createMemoryRepository(conn: Connection, now: () => Date, items:
 
     return {
         /**
-         * 写入一条记忆:同类型、同文本的 active 记忆只提高置信度(merged);
-         * 单值 entity_key 已有 active 值时,先把旧值标为 superseded 再插入新值(部分唯一索引要求这个顺序,ADR 0007)。
+         * 写入一条记忆(补充设计第 3 节第 4–5 条),全部在一个事务里:
+         * - 同类型的 active 记忆中已有同一条(FTS 候选 + 规范文本相同)→ merged;
+         * - 单值 entity_key 已有 active 值:值相同 → merged;新值是用户明说,或置信度不低于旧值 0.1 以上 → 更替;
+         *   否则两条都标为 conflicted 并写入 memory_conflicts;
+         * - 其余 → created。
+         * 更替时先把旧值标为 superseded 再插入新值(部分唯一索引要求这个顺序,ADR 0007 第 2 节第 3 条),
+         * 旧值改挂到「历史版本」,新值的 supersedes_id 指向旧值,并建 supersedes 边(新 → 旧)。
          */
-        save(
-            ownerId: string,
-            input: NewMemory,
-        ): { outcome: 'created' | 'merged' | 'superseded'; id: string; supersededId?: string } {
-            return sqlite.transaction(() => {
-                const duplicate = q.sameText.get(ownerId, input.memType, input.text);
-                if (duplicate) {
-                    q.confirm.run(iso(), duplicate.id);
-                    return { outcome: 'merged' as const, id: duplicate.id };
-                }
-                let supersededId: string | undefined;
+        save(ownerId: string, input: NewMemory): SaveOutcome {
+            return sqlite.transaction((): SaveOutcome => {
+                const duplicate = findDuplicate(ownerId, input);
+                if (duplicate) return merge(duplicate.id, input);
                 if (input.entityKey && input.cardinality === 'single') {
                     const old = q.activeSingle.get(ownerId, input.entityKey);
+                    if (old && sameValue(old, input)) return merge(old.id, input);
+                    if (
+                        old &&
+                        input.origin !== 'user_explicit' &&
+                        input.confidence < old.confidence - SUPERSEDE_MARGIN
+                    ) {
+                        // 新值把握不够:两条都不是 active,唯一索引不受限制,由用户在 digest / 冲突列表中确认
+                        const at = iso();
+                        q.setStatus.run('conflicted', at, old.id);
+                        const id = insert(ownerId, input, 'conflicted');
+                        const conflictId = newId(now());
+                        q.insertConflict.run(conflictId, ownerId, old.id, id, at);
+                        return { outcome: 'conflicted', id, conflictId };
+                    }
                     if (old) {
-                        // 先标旧值再插入新值(部分唯一索引要求这个顺序,ADR 0007 第 2 节第 3 条)
-                        q.setStatus.run('superseded', iso(), old.id);
+                        q.supersede.run({ id: old.id, at: iso() });
                         place(ownerId, { ...old, status: 'superseded' });
-                        supersededId = old.id;
+                        const id = insert(ownerId, input);
+                        q.setSupersedes.run(old.id, id);
+                        q.supersedesEdge.run(id, old.id);
+                        return { outcome: 'superseded', id, supersededId: old.id };
                     }
                 }
-                const id = insert(ownerId, input);
-                if (supersededId) {
-                    q.setSupersedes.run(supersededId, id);
-                    q.supersedesEdge.run(id, supersededId);
-                }
-                return supersededId
-                    ? { outcome: 'superseded' as const, id, supersededId }
-                    : { outcome: 'created' as const, id };
+                return { outcome: 'created', id: insert(ownerId, input) };
             })();
+        },
+        /** 推进决策状态;不合法的迁移返回 'invalid'(补充设计第 3 节第 6 条)。 */
+        setDecisionState(ownerId: string, id: string, next: DecisionState): 'ok' | 'not_found' | 'invalid' {
+            const row = q.get.get(ownerId, id);
+            if (!row || row.subtype !== 'decision') return 'not_found';
+            const from = row.decisionState ?? 'proposed';
+            if (next !== 'superseded' && !DECISION_NEXT[from].includes(next)) return 'invalid';
+            if (from === 'superseded') return 'invalid';
+            q.setDecision.run(next, iso(), id);
+            return 'ok';
+        },
+        /** 单值键当前的 active 记录。 */
+        activeFor(ownerId: string, entityKey: string): Memory | null {
+            const row = q.activeSingle.get(ownerId, entityKey);
+            return row ? toMemory(row) : null;
+        },
+        decisionState(ownerId: string, id: string): DecisionState | null {
+            return q.get.get(ownerId, id)?.decisionState ?? null;
+        },
+        conflicts(ownerId: string, status: MemoryConflict['status'] = 'open'): MemoryConflict[] {
+            return q.listConflicts.all(ownerId, status);
+        },
+        /** 放进隔离区:不进检索,到期清除。raw 必须已经过凭据检测与脱敏。 */
+        quarantine(
+            ownerId: string,
+            entry: { sessionId?: string | null | undefined; raw: unknown; reason: QuarantineReason },
+        ): string {
+            const id = newId(now());
+            const created = now();
+            const expires = new Date(created.getTime() + QUARANTINE_TTL_DAYS * 86_400_000);
+            let rawJson = JSON.stringify(entry.raw ?? null);
+            if (rawJson.length > QUARANTINE_MAX_RAW)
+                rawJson = JSON.stringify({ truncated: rawJson.slice(0, QUARANTINE_MAX_RAW) });
+            q.insertQuarantine.run(
+                id,
+                ownerId,
+                entry.sessionId ?? null,
+                rawJson,
+                entry.reason,
+                created.toISOString(),
+                expires.toISOString(),
+            );
+            return id;
+        },
+        /** 未过期的隔离区条目,最新的在前。 */
+        quarantined(ownerId: string): QuarantineEntry[] {
+            return q.listQuarantine.all(ownerId, iso()).map(({ rawJson, ...rest }) => ({
+                ...rest,
+                raw: JSON.parse(rawJson) as unknown,
+            }));
+        },
+        /**
+         * 每日配额:当天(UTC)已用次数小于 limit 时占用一次并返回 true,否则返回 false。
+         * 计数存在 jobs_state 中(例如自动抽取的每日 cheap 模型调用上限)。
+         */
+        takeDailySlot(ownerId: string, job: string, limit: number): boolean {
+            return sqlite.transaction(() => {
+                const at = iso();
+                const day = at.slice(0, 10);
+                const row = q.jobState.get(ownerId, job);
+                const state = row?.stateJson ? (JSON.parse(row.stateJson) as { day?: string; count?: number }) : {};
+                const count = state.day === day ? (state.count ?? 0) : 0;
+                if (count >= limit) return false;
+                q.upsertJobState.run(ownerId, job, at, JSON.stringify({ day, count: count + 1 }));
+                return true;
+            })();
+        },
+        /** 删除所有已过期的隔离区条目,返回删除的条数(维护任务调用)。 */
+        purgeQuarantine(): number {
+            return q.purgeQuarantine.run(iso()).changes;
         },
         get(ownerId: string, id: string): Memory | null {
             const row = q.get.get(ownerId, id);

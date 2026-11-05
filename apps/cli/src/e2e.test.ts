@@ -240,6 +240,8 @@ describe('CLI 端到端(不开 Web UI)', () => {
     });
 
     it('非交互时需要审批的 memory.save 默认被拒绝,记忆不写入', async () => {
+        // 普通事实会被条件预授权直接写入(ADR 0010 第 4 节);打开「每次都要审批」才会弹审批
+        await createClient({ baseUrl: base, token: savedToken() }).settings.update({ memory: { alwaysApprove: true } });
         enqueue('memory-save-roundtrip');
         const r = await cli(['ask', '记住我住杭州']);
         expect(r.code).toBe(0);

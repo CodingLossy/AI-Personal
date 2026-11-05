@@ -103,6 +103,7 @@ describe('/api/v1/tools、/approvals、/preauthorizations、/audit', () => {
             ['kb.search', 'read', 'auto', true, null],
             ['memory.save', 'write', 'required', true, null],
             ['memory.search', 'read', 'auto', true, null],
+            ['memory.write', 'write', 'required', true, null],
             ['time', 'read', 'auto', true, null],
             ['web.fetch', 'read', 'required', true, 'domain'],
         ]);
