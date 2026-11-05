@@ -26,6 +26,16 @@ export {
     type Retriever,
     type VectorSearch,
 } from './retrieve.js';
+export {
+    createMaintenanceRunner,
+    decayScore,
+    HALF_LIFE_DAYS,
+    type JobOutcome,
+    MAINTENANCE_JOBS,
+    type MaintenanceJob,
+    type MaintenanceRunner,
+    nextTier,
+} from './maintenance.js';
 export { estimateTokens } from './tokens.js';
 export {
     createMemoryService,

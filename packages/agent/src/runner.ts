@@ -135,6 +135,11 @@ export class RunManager {
     private readonly persistIntervalMs: number;
     private readonly now: () => number;
 
+    /** 正在进行的运行数(维护任务据此推迟,ADR 0007 第 5.7 节)。 */
+    get activeRuns(): number {
+        return this.active.size;
+    }
+
     constructor(private readonly options: RunManagerOptions) {
         this.persistIntervalMs = options.persistIntervalMs ?? 1000;
         this.now = options.now ?? Date.now;

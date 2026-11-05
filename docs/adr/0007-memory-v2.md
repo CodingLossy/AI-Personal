@@ -155,4 +155,17 @@ CREATE INDEX idx_mem_lookup ON memory_facts(owner_id, status, mem_type);
 - **访问计数**:检索后在内存里合并,每 5 秒批量写入 `access_count + 1`、`last_accessed_at`(每条每次刷新计一次);关闭时立即写入。
 - **工具与 REST**:新工具 `memory.retrieve`(read),`memory.search` 是它的别名;有查询时走三路召回并返回可信度说明,查询为空时列出最近的 active 记忆。新增 `POST /memory/retrieve`、`GET /memory/digest`。`POST /memory/search` 不变。
 - **#13 `recall()` 的回退**:有查询但没有命中时不再返回最近 20 条;「最近 N 条」只用于空查询(常驻背景由 digest 承担)。
+- **业主确认**(2026-11-05):保留中文二字词召回;sensitivity ≥ 1 不进 digest;置信度 0.6–0.8 的非推断记忆标「可靠」;digest 最多滞后 30 秒。
 - **性能**(1 万条记忆,本机):`retrieve` P95 21 ms(不含嵌入往返),digest 读取 P95 0.01 ms,digest 重建 5 ms。测量在 `packages/memory/src/retrieve.perf.test.ts`,CI 中按 80 ms / 5 ms 断言。
+
+### 5.7 维护任务(M2 PR 13)
+
+- **任务**(`packages/memory/src/maintenance.ts`):每天依次运行 `memory.decay` → `memory.tier` → `memory.expire`。`memory.sleep` 推迟到 M6(第 5.1 节);`memory.hygiene`、`memory.optimize` 推迟(M2 方案第 7 节)。
+  - **decay**:`decay_score = 0.5^(Δt / half_life)`,Δt 取 `max(last_confirmed_at, last_accessed_at)` 至今,都没有时取 `updated_at`。半衰期:episodic 30 天、procedural 180 天、semantic 365 天、done 的决策 90 天。置顶与 `user.*` / `pref.*` 单值事实不衰减(`decay_score = 1`)。只处理 active 与 conflicted。
+  - **tier**:active → cold:`decay_score < 0.3` 且 60 天未访问;→ archive:`< 0.1` 且 180 天未访问(满足时可以从 active 直接进 archive)。「未访问」取 `last_accessed_at`,没有时取 `last_confirmed_at` / `updated_at`。进入 archive 时删除嵌入与向量行(`embeddings.removeItem`),保留 FTS。分层只往下走;检索访问到的记忆在批量写访问计数时回到 active,原来在 archive 的重新排队嵌入。
+  - **expire**:`status = 'active'` 且 `valid_to < now` 的记录设为 `expired`。
+- **执行方式**:每批 500 行一个事务,批之间用 `setImmediate` 让出事件循环。每批之前检查:有对话正在进行(`RunManager.activeRuns > 0`)或 RSS 超过 300 MB 时停下并返回 `postponed`。
+- **状态与幂等**:`jobs_state(owner_id, job)` 的 `state_json` 记 `{ day, cursor, done, batches }`(UTC 日期、按 `item_id` 的游标)。同一天已完成的任务直接跳过;推迟或中断后从游标继续;第二天从头开始。`expire` 不需要游标(每批只取仍满足条件的行)。任何任务完成后防抖重建 digest。
+- **调度**(`apps/server/src/maintenance-setup.ts`):`croner`(MIT,import 后 heapUsed 约 +0.4 MiB)每天 03:30 运行,用服务器本地时间(1.0 设置中还没有用户时区);推迟时 10 分钟后重试,每天最多 12 次;启动 10 分钟后补跑一次(当天已完成的会跳过)。M6 的通用调度器上线后迁移过去。
+- **验收 ②**:「我搬到上海了」后旧值为 superseded,类型类别下默认可见的只有新值,旧值在 `meta.hidden = true` 的「历史版本」下,并能沿 `supersedes` 边(新 → 旧)找到;详情页与默认视图的隐藏由 PR 14 的 ItemProvider 与 UI 呈现。
+- **资源**:1 万条记忆上一次 decay + tier + expire 用时约 240 ms,额外 RSS 约 1 MB(目标 < 60 MB),测量在 `packages/memory/src/retrieve.perf.test.ts`。

@@ -177,8 +177,14 @@ export function createMemoryReadRepository(conn: Connection, now: () => Date) {
              WHERE s.memory_id = ? AND s.session_id IS NOT NULL
              ORDER BY s.created_at DESC LIMIT 1`,
         ),
+        archived: sqlite.prepare<[string], { id: string; ownerId: string; text: string }>(
+            `SELECT f.item_id AS id, f.owner_id AS ownerId, i.summary AS text FROM memory_facts f
+             JOIN items i ON i.id = f.item_id
+             WHERE f.tier = 'archive' AND f.item_id IN (SELECT value FROM json_each(?))`,
+        ),
+        // 被访问的记忆回到 active 层(补充设计第 5 节)
         touch: sqlite.prepare<[string, string]>(
-            `UPDATE memory_facts SET access_count = access_count + 1, last_accessed_at = ?
+            `UPDATE memory_facts SET access_count = access_count + 1, last_accessed_at = ?, tier = 'active'
              WHERE item_id IN (SELECT value FROM json_each(?))`,
         ),
         // digest 候选:置顶 → 画像类单值事实 → accepted 的决策 → procedural 偏好(补充设计第 4.5 节)
@@ -261,9 +267,18 @@ export function createMemoryReadRepository(conn: Connection, now: () => Date) {
                 answer: textOfParts(row.a),
             };
         },
-        /** access_count + 1、last_accessed_at = now(检索后批量调用)。 */
-        touch(ids: readonly string[]): void {
-            if (ids.length > 0) q.touch.run(now().toISOString(), JSON.stringify(ids));
+        /**
+         * access_count + 1、last_accessed_at = now,并回到 active 层(检索后批量调用)。
+         * 返回原来在 archive 层的记忆:它们的向量已删除,调用方要重新排队嵌入。
+         */
+        touch(ids: readonly string[]): { id: string; ownerId: string; text: string }[] {
+            if (ids.length === 0) return [];
+            const json = JSON.stringify(ids);
+            return sqlite.transaction(() => {
+                const archived = q.archived.all(json);
+                q.touch.run(now().toISOString(), json);
+                return archived;
+            })();
         },
         digestCandidates(ownerId: string, limit: number): MemoryCandidate[] {
             return q.digest.all(ownerId, limit).map((r) => {

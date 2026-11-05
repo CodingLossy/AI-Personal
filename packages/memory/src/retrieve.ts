@@ -117,6 +117,8 @@ export interface RetrieverOptions {
     now?: () => Date;
     /** access_count 批量写入的间隔,默认 5 秒(补充设计第 4.6 节)。 */
     flushMs?: number;
+    /** 归档的记忆被访问后回到 active 层时调用(重新排队嵌入)。 */
+    onReactivated?: (ownerId: string, id: string, text: string) => void;
 }
 
 export function createRetriever(options: RetrieverOptions) {
@@ -133,7 +135,8 @@ export function createRetriever(options: RetrieverOptions) {
         if (pending.size === 0) return;
         const ids = [...pending];
         pending.clear();
-        repos.memoryRead.touch(ids);
+        // 从 archive 层被访问回来的记忆:向量已在归档时删除,重新排队嵌入
+        for (const m of repos.memoryRead.touch(ids)) options.onReactivated?.(m.ownerId, m.id, m.text);
     };
     const markUsed = (ids: readonly string[]) => {
         for (const id of ids) pending.add(id);

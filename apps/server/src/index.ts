@@ -12,6 +12,7 @@ import { createSummarizer, createToolRegistry, createTurnExtractor } from './age
 import { createApp } from './app.js';
 import { createMcpControl } from './mcp-setup.js';
 import { createMemoryStack } from './memory-setup.js';
+import { startMaintenance } from './maintenance-setup.js';
 import { createEmbeddingService } from './embeddings.js';
 import { randomToken } from './auth/crypto.js';
 import { loadConfig } from './config.js';
@@ -84,6 +85,14 @@ const runs = new RunManager({
     ),
     onError: (err, { runId }) => logger.error({ err, runId }, 'run failed unexpectedly'),
 });
+// 记忆维护任务:每天 03:30 运行 decay / tier / expire,有对话进行中时推迟(ADR 0007 第 5.7 节)
+const maintenance = startMaintenance({
+    repos,
+    removeVectors: (itemId) => repos.embeddings.removeItem(itemId),
+    isBusy: () => runs.activeRuns > 0,
+    onChanged: (ownerId) => memoryStack.digest.schedule(ownerId),
+    onError: (err) => logger.warn({ err }, 'memory maintenance failed'),
+});
 const interrupted = runs.recoverInterrupted();
 if (interrupted > 0) logger.warn({ count: interrupted }, 'marked runs interrupted by the previous shutdown as failed');
 
@@ -123,6 +132,7 @@ function shutdown(signal: string): void {
     mcp.closeAll();
     embeddings.stop();
     memoryStack.stop();
+    maintenance.stop();
     server.close(() => {
         conn.close();
         process.exit(0);
