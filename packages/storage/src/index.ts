@@ -12,6 +12,13 @@ export { applyPragmas, assertForeignKeysOn, openDatabase, StorageError, type Con
 export { newId } from './ids.js';
 export { dedupKey, QUARANTINE_TTL_DAYS } from './memory.js';
 export type {
+    MemoryCandidate,
+    MemoryExcerpt,
+    MemoryReadRepository,
+    OpenConflict,
+    StoredDigest,
+} from './memory-read.js';
+export type {
     MemoryConflict,
     NewMemory,
     QuarantineEntry,

@@ -13,6 +13,7 @@ import {
 } from '@ai-personal/memory';
 import { type ModelProvider, selectProfile } from '@ai-personal/providers';
 import { MemorySearchInput } from '@ai-personal/shared';
+import type { MemoryStack } from './memory-setup.js';
 import { z } from 'zod';
 import type { ModelProfileRecord, Repositories } from '@ai-personal/storage';
 import {
@@ -57,6 +58,11 @@ const MEMORY_WRITE_PARAMETERS = {
     additionalProperties: false,
 } as const;
 
+const RETRIEVE_DESCRIPTION =
+    'Search long-term memory for facts about the user. Relevant memories are already added to the context each ' +
+    'turn; use this to look further. Each result has a qualifier: reliable, possibly_stale, conflicted or inferred. ' +
+    'Leave query empty to list recent memories.';
+
 /** 审批卡片与审计中的一句话说明:先脱敏;含凭据时不显示正文(写入时会被拒存)。 */
 function summarizeWrite(input: unknown): string {
     const text = (input as { text?: unknown } | null)?.text;
@@ -68,9 +74,57 @@ function summarizeWrite(input: unknown): string {
 /**
  * memory.write(memory.save 是它的别名,ADR 0007 第 5.4 节)是 write 级别,有条件预授权(业主决定 4):
  * 本轮没有外部内容、sensitivity 为 0、不更替已有的单值画像事实时直接写入,其余情况需要审批。
- * memory.search 是 read,直接执行(ADR 0010)。
+ * memory.retrieve(memory.search 是它的别名)是 read,直接执行(ADR 0010):有查询时走三路召回并返回带可信度说明的
+ * 条目;查询为空时列出最近的 active 记忆(ADR 0007 第 5.6 节)。
  */
-export function createMemoryTools(memory: MemoryService): ToolDefinition[] {
+export function createMemoryTools(stack: Pick<MemoryStack, 'memory' | 'retriever'>): ToolDefinition[] {
+    const { memory, retriever } = stack;
+    const retrieve = (name: string, description: string): ToolDefinition => ({
+        name,
+        description,
+        parameters: {
+            type: 'object',
+            properties: {
+                query: {
+                    type: 'string',
+                    description: 'Short keywords or a question; an empty string lists recent memories.',
+                },
+                limit: { type: 'integer', minimum: 1, maximum: 30 },
+            },
+            additionalProperties: false,
+        },
+        risk: 'read',
+        summarize: () => 'Search memory',
+        execute: async (input, ctx) => {
+            const parsed = MemoryRecallInput.parse(input);
+            if (!parsed.query.trim()) {
+                const recent = memory.recall(ctx.ownerId, { query: '', limit: parsed.limit });
+                return {
+                    items: recent.items.map((m) => ({
+                        id: m.id,
+                        text: m.text,
+                        type: m.memType,
+                        confidence: m.confidence,
+                    })),
+                };
+            }
+            const result = await retriever.retrieve(ctx.ownerId, {
+                query: parsed.query,
+                ...(parsed.limit ? { limit: parsed.limit } : {}),
+            });
+            return {
+                items: result.items.map((m) => ({
+                    id: m.id,
+                    text: m.text,
+                    type: m.memType,
+                    confidence: m.confidence,
+                    qualifier: m.qualifier,
+                    lastConfirmedAt: m.lastConfirmedAt,
+                })),
+                omitted: result.omitted,
+            };
+        },
+    });
     const write = (name: string, description: string): ToolDefinition => ({
         name,
         description,
@@ -101,38 +155,8 @@ export function createMemoryTools(memory: MemoryService): ToolDefinition[] {
     return [
         write('memory.write', description),
         write('memory.save', `${description} Alias of memory.write.`),
-        {
-            name: 'memory.search',
-            description:
-                'Search long-term memory for facts about the user. Use 1-2 short, broad keywords (e.g. "深圳" or ' +
-                '"city"), or leave query empty to list recent memories. If nothing matches, the most recently ' +
-                'updated memories are returned instead, so check them yourself.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    query: {
-                        type: 'string',
-                        description: '1-2 short, broad keywords; an empty string lists recent memories.',
-                    },
-                    limit: { type: 'integer', minimum: 1, maximum: 30 },
-                },
-                additionalProperties: false,
-            },
-            risk: 'read',
-            summarize: () => 'Search memory',
-            execute: (input, ctx) => {
-                const result = memory.recall(ctx.ownerId, MemoryRecallInput.parse(input));
-                return Promise.resolve({
-                    items: result.items.map((m) => ({
-                        id: m.id,
-                        text: m.text,
-                        type: m.memType,
-                        confidence: m.confidence,
-                        updatedAt: m.updatedAt,
-                    })),
-                });
-            },
-        },
+        retrieve('memory.retrieve', RETRIEVE_DESCRIPTION),
+        retrieve('memory.search', `${RETRIEVE_DESCRIPTION} Alias of memory.retrieve.`),
     ];
 }
 
@@ -198,7 +222,7 @@ export function createTurnExtractor(
 
 /** 组合根:记忆工具、内置工具 time / calc / web.fetch、文件工具 fs.*、条目工具 items.* 与 kb.search(ADR 0010–0015)。 */
 export function createToolRegistry(
-    memory: MemoryService,
+    memory: Pick<MemoryStack, 'memory' | 'retriever'>,
     repos: Repositories,
     items: ItemService,
     kb: KnowledgeBase,

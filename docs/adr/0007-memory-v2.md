@@ -139,3 +139,20 @@ CREATE INDEX idx_mem_lookup ON memory_facts(owner_id, status, mem_type);
 - **设置**(`packages/shared` 的增量字段):`memory.alwaysApprove`(默认 false,打开后关闭条件预授权)、`memory.extractDailyLimit`(0–1000,默认 200)。
 - **自动抽取**:`RunManager` 新增 `onTurnFinished` 回调(一轮正常结束后调用);抽取器只把用户消息与助手消息的最后一段文本交给 cheap 模型,每轮最多 3 条,每日配额记在 `jobs_state(job = 'memory.extract')`(按 UTC 日期)。本轮出现过外部内容时,抽取结果只进隔离区(`untrusted_source`),等用户在 PR 14 的隔离区中确认。
 - 写入后的「已记住:… [撤销]」提示属于 Web UI,放在 PR 14;撤销即 `DELETE /memory/{id}`。
+
+### 5.6 检索、digest 与每轮上下文(M2 PR 12)
+
+- **三路召回**(每路最多 30 条,`packages/storage/src/memory-read.ts` + `packages/memory/src/retrieve.ts`):
+  - **全文**:FTS5 trigram(bm25);没有 ≥ 3 字符的词时整句 `LIKE`。另加**中文二字词召回**:trigram 下整句中文问句几乎命中不了(「我还住在杭州吗」找不到「用户常住杭州」),所以从查询中取不含虚词的相邻两字(「杭州」,最多 8 个,另排除「用户」「现在」等泛词)做 `LIKE`,按命中词数排序,接在 FTS 结果之后。`LIKE` 只扫 active 层。
+  - **向量**:ADR 0014 的统一表,多取 90 条再只留记忆;没有 embed 配置档、维度不匹配或接口失败时跳过这一路。新建记忆(created / superseded / conflicted)写入后排队嵌入(`chunk = 0`),编辑正文后重新排队。
+  - **图**:种子 = `scopeItemId` + 标题出现在查询中的非记忆内容条目,沿 `mentions` / `derived` 一跳。
+- **融合与重排**按补充设计第 4.2 节:RRF(k = 60,权重 1.0 / 1.0 / 0.7),再乘 `(0.5 + 0.5·confidence) × tierF × (0.7 + 0.3·decay_score) × (pinned ? 1.2 : 1)`。默认只取 active 与 conflicted;`includeSuperseded` 或查询里有「以前 / 之前 / 历史 / previously …」时带上 superseded。archive 层只在 `includeArchive` 或前两层不足 3 条时参与。
+- **可信度说明**由 core 按顺序判断:conflicted → 有冲突;`origin = extracted` 且 confidence < 0.6 → 推断;180 天内没确认过或 `stale_count > 0` → 可能过时;其余 → 可靠(补充设计没有规定 0.6–0.8 的非推断记忆,归为可靠)。每条渲染为 `[记忆 m:<id> | 事实 | 置信 0.90 | 用户明说 · 2026-11-01 | 状态:可靠]` 加正文。分数最高的 3 条在预算允许时附「当时你问:… / 我答:…」,摘录取自消息表,先脱敏、各截断到 120 字,含凭据的不显示。
+- **预算**:记忆块 ≤ `settings.memory.blockTokens`(默认 1,200)且 ≤ 模型上下文的 10%,每条 ≤ 80 tokens,按分数贪心装填,装不下时注明「另有 N 条相关记忆未展示」。token 按字符保守估算(`packages/memory/src/tokens.ts`,与 agent 的规则相同)。
+- **渠道过滤**:`direct`(Web、CLI、API、私聊)允许 sensitivity ≤ 1;`group` 只允许 0。sensitivity 2 只在 direct 渠道且全文命中(用户的话直接问到)时给出。M2 只有 direct。
+- **digest**(`digest.ts`):置顶 → `user.*` / `pref.*` 单值事实 → accepted 的决策 → procedural 偏好,然后列出最多 3 个未解决的冲突作为待确认问题;≤ `settings.memory.digestTokens`(默认 400)且最多 15 条;每行带可信度标签,如「用户常住杭州(可靠)」。sensitivity ≥ 1 的记忆不进 digest(digest 是一份缓存,以后的群聊渠道也会用到)。缓存在 `memory_digest`,写入、编辑、删除后防抖 30 秒重建;没有缓存时现建。
+- **每轮上下文**:`RunManager` 新增 `memoryContext` 选项。会话第一轮注入 digest,每轮按用户消息检索,记忆块去掉 digest 中已有的条目;两者作为系统消息放在系统提示之后。用到的记忆通过 `memory-used { runId, ids }` 发出。失败时这一轮照常进行。系统提示增加一句:依赖「可能过时 / 有冲突」的记忆前先说明或确认。
+- **访问计数**:检索后在内存里合并,每 5 秒批量写入 `access_count + 1`、`last_accessed_at`(每条每次刷新计一次);关闭时立即写入。
+- **工具与 REST**:新工具 `memory.retrieve`(read),`memory.search` 是它的别名;有查询时走三路召回并返回可信度说明,查询为空时列出最近的 active 记忆。新增 `POST /memory/retrieve`、`GET /memory/digest`。`POST /memory/search` 不变。
+- **#13 `recall()` 的回退**:有查询但没有命中时不再返回最近 20 条;「最近 N 条」只用于空查询(常驻背景由 digest 承担)。
+- **性能**(1 万条记忆,本机):`retrieve` P95 21 ms(不含嵌入往返),digest 读取 P95 0.01 ms,digest 重建 5 ms。测量在 `packages/memory/src/retrieve.perf.test.ts`,CI 中按 80 ms / 5 ms 断言。

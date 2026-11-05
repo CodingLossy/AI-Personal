@@ -14,4 +14,23 @@ export {
     type TurnInfo,
 } from './extract.js';
 export { looksLikeInstruction } from './instructions.js';
-export { createMemoryService, defaultCardinality, type MemoryService, type WriteContext } from './service.js';
+export { createMemoryContext, type MemoryContext, type MemoryContextInput } from './context.js';
+export { createDigestBuilder, DIGEST_DEBOUNCE_MS, DIGEST_MAX_ITEMS, type DigestBuilder } from './digest.js';
+export {
+    BLOCK_HEADER,
+    createRetriever,
+    qualify,
+    renderMemory,
+    rerank,
+    type RetrieveOptions,
+    type Retriever,
+    type VectorSearch,
+} from './retrieve.js';
+export { estimateTokens } from './tokens.js';
+export {
+    createMemoryService,
+    defaultCardinality,
+    type MemoryService,
+    type MemoryServiceHooks,
+    type WriteContext,
+} from './service.js';

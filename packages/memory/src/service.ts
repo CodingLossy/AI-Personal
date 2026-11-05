@@ -102,7 +102,14 @@ export interface MemoryService {
 export const RECALL_FALLBACK_LIMIT = 20;
 
 /** 记忆 v1:凭据一律拒存;其余写入走仓储的合并 / 更替规则。 */
-export function createMemoryService(repos: Repositories): MemoryService {
+export interface MemoryServiceHooks {
+    /** 新建了一条记忆(created / superseded / conflicted),例如排队嵌入。 */
+    onCreated?: (ownerId: string, id: string, text: string) => void;
+    /** 记忆有任何变化,例如防抖重建 digest。 */
+    onChanged?: (ownerId: string) => void;
+}
+
+export function createMemoryService(repos: Repositories, hooks: MemoryServiceHooks = {}): MemoryService {
     return {
         write(ownerId, rawInput, context) {
             // 凭据先于一切:即使输入不合法也不能进隔离区
@@ -135,8 +142,9 @@ export function createMemoryService(repos: Repositories): MemoryService {
             const text = redactSensitive(input.text);
             const value = input.value ? redactSensitiveIn(input.value) : null;
             const key = input.entityKey ? normalizeEntityKey(input.entityKey) : null;
-            return repos.memories.save(ownerId, {
-                text: text.text.slice(0, MAX_TEXT),
+            const stored = text.text.slice(0, MAX_TEXT);
+            const result = repos.memories.save(ownerId, {
+                text: stored,
                 memType: input.memType,
                 subtype: input.subtype ?? null,
                 entityKey: key?.key ?? null,
@@ -151,6 +159,10 @@ export function createMemoryService(repos: Repositories): MemoryService {
                 decisionState: input.decisionState ?? null,
                 ...(input.source ? { source: input.source } : {}),
             });
+            // 新记录排队嵌入(合并时文本不变,不必重嵌);任何变化都触发 digest 防抖重建
+            if (result.outcome !== 'merged') hooks.onCreated?.(ownerId, result.id, stored);
+            hooks.onChanged?.(ownerId);
+            return result;
         },
         canWriteWithoutApproval(ownerId, rawInput) {
             if (detectCredentialIn(contentOf(rawInput))) return false;
@@ -171,11 +183,9 @@ export function createMemoryService(repos: Repositories): MemoryService {
             return { items: repos.memories.search(ownerId, input.query, { types: input.types, limit: input.limit }) };
         },
         recall(ownerId, input) {
+            // 有三路召回与 digest 之后,「最近 N 条」只用于空查询(ADR 0007 第 5.6 节);有查询时只返回命中
             const query = input.query?.trim() ?? '';
-            if (query) {
-                const found = this.search(ownerId, { query, types: input.types, limit: input.limit });
-                if (found.items.length > 0) return found;
-            }
+            if (query) return this.search(ownerId, { query, types: input.types, limit: input.limit });
             const limit = Math.min(input.limit ?? RECALL_FALLBACK_LIMIT, RECALL_FALLBACK_LIMIT);
             const items = repos.memories
                 .list(ownerId, RECALL_FALLBACK_LIMIT * 3)

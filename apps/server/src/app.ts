@@ -6,7 +6,8 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { type HealthResponse, MetaResponseSchema, PROTOCOL_VERSION, SERVER_LICENSE } from '@ai-personal/shared';
 import type { EventBus, RunManager } from '@ai-personal/agent';
-import { detectCredential, type MemoryService } from '@ai-personal/memory';
+import { detectCredential } from '@ai-personal/memory';
+import type { MemoryStack } from './memory-setup.js';
 import { createProvider, type ProviderDeps, type SecretStore } from '@ai-personal/providers';
 import { newId, type Repositories } from '@ai-personal/storage';
 import type { Context } from 'hono';
@@ -55,8 +56,8 @@ export interface AppDeps {
     /** 事件总线与运行管理(ADR 0004 第 5 节)。 */
     bus: EventBus;
     runs: RunManager;
-    /** 记忆 v1(REST 与 memory.* 工具共用)。 */
-    memory: MemoryService;
+    /** 记忆的写入、检索与 digest(REST 与 memory.* 工具共用)。 */
+    memory: MemoryStack;
     now?: () => Date;
     /** 请求来源地址;默认取 TCP 对端地址(不信任 X-Forwarded-For)。 */
     clientIp?: (c: Context<AppEnv>) => string;

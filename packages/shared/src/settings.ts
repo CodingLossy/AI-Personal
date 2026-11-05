@@ -21,6 +21,10 @@ export const Settings = z.object({
         extractDailyLimit: z.number().int().min(0).max(1000),
         /** memory.write 每次都要审批:关闭条件预授权(ADR 0010 第 4 节)。自 M2 PR 11 起提供。 */
         alwaysApprove: z.boolean(),
+        /** 会话开头 digest 的 token 上限(ADR 0007 第 5.1 节)。自 M2 PR 12 起提供。 */
+        digestTokens: z.number().int().min(100).max(1000),
+        /** 每轮记忆块的 token 上限,另外不超过模型上下文的 10%。自 M2 PR 12 起提供。 */
+        blockTokens: z.number().int().min(200).max(4000),
     }),
     /** 本地知识库(ADR 0015)。自 M2 PR 9 起提供。 */
     knowledgeBase: z.object({
@@ -41,6 +45,6 @@ export const DEFAULT_SETTINGS: Settings = {
     defaultCheapProfileId: null,
     locale: 'zh-CN',
     theme: 'system',
-    memory: { autoExtract: false, extractDailyLimit: 200, alwaysApprove: false },
+    memory: { autoExtract: false, extractDailyLimit: 200, alwaysApprove: false, digestTokens: 400, blockTokens: 1200 },
     knowledgeBase: { chunkChars: 1000 },
 };

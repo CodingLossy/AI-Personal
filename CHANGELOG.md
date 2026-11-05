@@ -44,9 +44,16 @@ All notable user-visible changes are listed here. The format follows [Keep a Cha
   - invalid, overlong or instruction-like content from outside sources goes to a quarantine for 14 days instead of memory.
 - New tool `memory.write` (`memory.save` is now its alias). It saves without asking when your own message triggered it, nothing sensitive is involved and no profile fact is replaced; otherwise it asks for approval. Settings: `memory.alwaysApprove` asks every time.
 - Automatic memory extraction after each turn (off by default; `memory.autoExtract`, at most `memory.extractDailyLimit` = 200 cheap-model calls per day). It only reads your message and the final answer, never tool output; after a turn that read outside content it only proposes memories into the quarantine.
+- **Memory retrieval** (ADR 0007 §5.6): relevant memories are now added to the conversation automatically.
+  - Recall combines full-text search (with a Chinese two-character fallback), vector search when an embed profile exists, and linked items.
+  - Each memory is shown with a trust label: reliable, possibly stale, conflicted or inferred. The top results include where they came from.
+  - The memory block is limited to `memory.blockTokens` (default 1,200 tokens, and at most 10% of the model's context).
+  - A short digest of pinned memories, profile facts, accepted decisions and open conflicts is added at the start of each session (`memory.digestTokens`, default 400).
+- New tool `memory.retrieve` (`memory.search` is now its alias) and endpoints `POST /memory/retrieve` and `GET /memory/digest`. The `memory-used` event is now sent with the memories used in each turn.
 
 #### Changed
 
+- `memory.search` with a query no longer falls back to the 20 most recent memories when nothing matches; an empty query still lists them.
 - Approvals that were pending when the server restarted now expire instead of being lost silently.
 
 ### M1 · Chat core (2026-11-04)
@@ -121,6 +128,9 @@ All notable user-visible changes are listed here. The format follows [Keep a Cha
   - 来自外部、不合法、过长或像指令的内容进隔离区(保留 14 天),不进记忆。
 - 新工具 `memory.write`(`memory.save` 成为它的别名):由你本人的消息触发、不涉及敏感内容、不更替画像事实时直接写入,其余情况需要审批;设置 `memory.alwaysApprove` 可改为每次都审批。
 - 每轮结束后的自动抽取(默认关闭;`memory.autoExtract`,每天最多 `memory.extractDailyLimit` = 200 次 cheap 模型调用):只读你的消息和最终回答,不读工具输出;读过外部内容的那一轮只把建议放进隔离区。
+- **记忆检索**(ADR 0007 第 5.6 节):相关记忆现在会自动加进对话。召回结合全文检索(含中文二字词回退)、有 embed 配置档时的向量检索,以及关联条目;每条带可信度标签(可靠 / 可能过时 / 有冲突 / 推断),分数最高的几条附出处。记忆块不超过 `memory.blockTokens`(默认 1,200 tokens,且不超过模型上下文的 10%)。每个会话开头注入一段 digest:置顶记忆、画像事实、已接受的决策与待确认的冲突(`memory.digestTokens`,默认 400)。
+- 新工具 `memory.retrieve`(`memory.search` 成为它的别名),新端点 `POST /memory/retrieve` 与 `GET /memory/digest`;每轮会发送 `memory-used` 事件,列出用到的记忆。
+- `memory.search` 带查询而没有命中时,不再回退为最近 20 条;空查询仍列出最近的记忆。
 - 服务器重启时尚未处理的审批请求会过期,不再悄悄丢失。
 
 ### M1 · 对话核心(2026-11-04)

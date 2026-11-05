@@ -2,11 +2,14 @@
 // Copyright (C) 2026 尹绪柏 (Theodore Yin)
 
 import { createRoute, z } from '@hono/zod-openapi';
-import type { MemoryService } from '@ai-personal/memory';
+import type { MemoryStack } from '../memory-setup.js';
 import {
     Id,
     Memory,
+    MemoryDigest,
     MemoryPatch,
+    MemoryRetrieveInput,
+    MemoryRetrieveResult,
     MemorySaveInput,
     MemorySaveResult,
     MemorySearchInput,
@@ -51,6 +54,27 @@ const searchRoute = createRoute({
     responses: { 200: json(MemorySearchResult, 'Matches, best first'), 400: problem('Invalid request'), ...authErrors },
 });
 
+const retrieveRoute = createRoute({
+    method: 'post',
+    path: '/memory/retrieve',
+    tags: ['memory'],
+    summary: 'Retrieve memories with full-text, vector and graph recall, with trust qualifiers and a rendered block',
+    request: { body: { content: { 'application/json': { schema: MemoryRetrieveInput } }, required: true } },
+    responses: {
+        200: json(MemoryRetrieveResult, 'Ranked memories and the rendered memory block'),
+        400: problem('Invalid request'),
+        ...authErrors,
+    },
+});
+
+const digestRoute = createRoute({
+    method: 'get',
+    path: '/memory/digest',
+    tags: ['memory'],
+    summary: 'The memory digest injected at the start of each session',
+    responses: { 200: json(MemoryDigest, 'Digest'), ...authErrors },
+});
+
 const getRoute = createRoute({
     method: 'get',
     path: '/memory/{id}',
@@ -85,18 +109,23 @@ const deleteRoute = createRoute({
 
 export interface MemoryRouteDeps {
     repos: Repositories;
-    memory: MemoryService;
+    memory: MemoryStack;
     detectCredential: (text: string) => string | null;
 }
 
 export function memoryRoutes(deps: MemoryRouteDeps) {
-    const { repos, memory } = deps;
+    const { repos } = deps;
+    const { memory } = deps.memory;
     return router()
         .openapi(listRoute, (c) =>
             c.json({ items: repos.memories.list(requireOwner(c), c.req.valid('query').limit), nextCursor: null }, 200),
         )
         .openapi(saveRoute, (c) => c.json(memory.save(requireOwner(c), c.req.valid('json'), 'user_explicit'), 200))
         .openapi(searchRoute, (c) => c.json(memory.search(requireOwner(c), c.req.valid('json')), 200))
+        .openapi(retrieveRoute, async (c) =>
+            c.json(await deps.memory.retriever.retrieve(requireOwner(c), c.req.valid('json')), 200),
+        )
+        .openapi(digestRoute, (c) => c.json(deps.memory.digest.get(requireOwner(c)), 200))
         .openapi(getRoute, (c) => {
             const m = repos.memories.get(requireOwner(c), c.req.valid('param').id);
             if (!m) throw notFound('Memory');
@@ -115,6 +144,10 @@ export function memoryRoutes(deps: MemoryRouteDeps) {
                 retract: body.status === 'retracted',
             });
             if (!updated) throw notFound('Memory');
+            deps.memory.changed(
+                requireOwner(c),
+                body.text !== undefined ? { id: updated.id, text: updated.text } : undefined,
+            );
             return c.json(updated, 200);
         })
         .openapi(deleteRoute, (c) => {
@@ -122,6 +155,7 @@ export function memoryRoutes(deps: MemoryRouteDeps) {
             const { id } = c.req.valid('param');
             if (!repos.memories.delete(ownerId, id)) throw notFound('Memory');
             c.get('logger').info({ memoryId: id }, 'memory forgotten');
+            deps.memory.changed(ownerId);
             return c.body(null, 204);
         });
 }
