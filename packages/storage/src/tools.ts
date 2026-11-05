@@ -3,6 +3,7 @@
 
 // 工具框架的三张表:审批请求、预授权、审计日志(ADR 0010)。
 import type {
+    ApprovalWarning,
     ApprovalRequest,
     ApprovalStatus,
     AuditEntry,
@@ -29,6 +30,7 @@ interface ApprovalRow {
     createdAt: string;
     expiresAt: string;
     decidedAt: string | null;
+    warningsJson: string | null;
 }
 
 interface PreauthRow {
@@ -59,7 +61,7 @@ interface AuditRow {
 
 const APPROVAL_COLUMNS = `call_id AS callId, owner_id AS ownerId, run_id AS runId, session_id AS sessionId,
     tool_name AS toolName, risk, summary, input_json AS inputJson, preauthorizable, status,
-    created_at AS createdAt, expires_at AS expiresAt, decided_at AS decidedAt`;
+    created_at AS createdAt, expires_at AS expiresAt, decided_at AS decidedAt, warnings_json AS warningsJson`;
 const PREAUTH_COLUMNS = `id, tool_name AS toolName, scope, session_id AS sessionId, constraint_json AS constraintJson,
     created_at AS createdAt, last_used_at AS lastUsedAt`;
 const AUDIT_COLUMNS = `id, at, action, tool_name AS toolName, risk, call_id AS callId, run_id AS runId,
@@ -81,6 +83,7 @@ function toApproval(row: ApprovalRow): ApprovalRequest {
         createdAt: row.createdAt,
         expiresAt: row.expiresAt,
         decidedAt: row.decidedAt,
+        ...(row.warningsJson ? { warnings: JSON.parse(row.warningsJson) as ApprovalWarning[] } : {}),
     };
 }
 
@@ -106,6 +109,8 @@ export interface NewApprovalRequest {
     input: unknown;
     preauthorizable: boolean;
     expiresAt: Date;
+    /** core 生成的审批警告(ADR 0016 第 8 节);没有时省略。 */
+    warnings?: ApprovalWarning[];
 }
 
 export type NewAuditEntry = Omit<AuditEntry, 'id' | 'at'>;
@@ -117,9 +122,9 @@ export function createToolRepositories(conn: Connection, now: () => Date) {
     const q = {
         approvalInsert: sqlite.prepare(
             `INSERT INTO approval_requests (call_id, owner_id, run_id, session_id, tool_name, risk, summary, input_json,
-               preauthorizable, status, created_at, expires_at)
+               preauthorizable, status, created_at, expires_at, warnings_json)
              VALUES (@callId, @ownerId, @runId, @sessionId, @toolName, @risk, @summary, @inputJson,
-               @preauthorizable, 'pending', @createdAt, @expiresAt)`,
+               @preauthorizable, 'pending', @createdAt, @expiresAt, @warningsJson)`,
         ),
         approvalGet: sqlite.prepare<[string, string], ApprovalRow>(
             `SELECT ${APPROVAL_COLUMNS} FROM approval_requests WHERE owner_id = ? AND call_id = ?`,
@@ -213,6 +218,7 @@ export function createToolRepositories(conn: Connection, now: () => Date) {
                 preauthorizable: input.preauthorizable ? 1 : 0,
                 createdAt: iso(),
                 expiresAt: input.expiresAt.toISOString(),
+                warningsJson: input.warnings?.length ? JSON.stringify(input.warnings) : null,
             });
             return approvals.get(ownerId, input.callId)!;
         },

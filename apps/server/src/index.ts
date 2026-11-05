@@ -8,7 +8,8 @@ import { EventBus, RunManager } from '@ai-personal/agent';
 import { createItemService, createKnowledgeBase } from '@ai-personal/items';
 import { createProvider, Redactor, SecretStore } from '@ai-personal/providers';
 import { createRepositories, openStorage } from '@ai-personal/storage';
-import { createSummarizer, createToolRegistry, createTurnExtractor } from './agent-setup.js';
+import { createMailComplete, createSummarizer, createToolRegistry, createTurnExtractor } from './agent-setup.js';
+import { runInWorker } from '@ai-personal/mail';
 import { createApp } from './app.js';
 import { createMcpControl } from './mcp-setup.js';
 import { createMailService } from './mail-setup.js';
@@ -77,7 +78,18 @@ const runs = new RunManager({
     repos,
     bus,
     providerFor,
-    tools: createToolRegistry(memoryStack, repos, items, kb),
+    tools: createToolRegistry(
+        memoryStack,
+        repos,
+        items,
+        kb,
+        {},
+        {
+            runner: runInWorker,
+            secret: (ref) => secrets.resolve(ref),
+            complete: createMailComplete(repos, providerFor),
+        },
+    ),
     memoryContext: (input) => memoryStack.context(input),
     redact: (text) => redactor.redact(text),
     summarize: createSummarizer(repos, providerFor),

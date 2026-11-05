@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 尹绪柏 (Theodore Yin)
 
-import type { PreauthConstraintKind, ToolRisk } from '@ai-personal/shared';
+import type { ApprovalWarning, PreauthConstraintKind, ToolRisk } from '@ai-personal/shared';
 
 /**
  * 工具在执行中发现请求越权(例如路径在授权目录之外)时抛出的错误:core 把这次调用按「拒绝」审计,
@@ -19,10 +19,12 @@ export interface ToolContext {
     userMessageId: string;
     assistantMessageId: string;
     /**
-     * 本次运行中是否已有工具返回过外部(不可信)内容。为 true 时条件预授权一律不成立,
+     * 本会话中是否已有工具返回过外部(不可信)内容(按会话判断,ADR 0016 第 7 节)。为 true 时条件预授权一律不成立,
      * 因为之后的调用可能是被这些内容诱导的(ADR 0010 第 4 节)。
      */
     untrustedContentSeen: boolean;
+    /** 经审批后执行时:审批请求创建的时间。工具可据此确认审批之后内容没有被改动(例如 mail.send 的草稿)。 */
+    approvalRequestedAt?: string;
 }
 
 /**
@@ -58,7 +60,12 @@ export interface ToolDefinition {
     requireConstraint?: PreauthConstraintKind;
     /** 条件预授权:只能依据 core 已知的事实计算(ADR 0010 第 4 节)。 */
     autoApproveWhen?: (input: unknown, context: ToolContext) => boolean;
-    /** 审批卡片上的一句话说明;输入来自模型,调用方须按不可信的纯文本显示。 */
-    summarize(input: unknown): string;
+    /**
+     * 审批卡片上的说明;输入来自模型,调用方须按不可信的纯文本显示。
+     * context 只在创建审批请求时提供(例如 mail.send 据此读出草稿的完整内容)。
+     */
+    summarize(input: unknown, context?: ToolContext): string;
+    /** 创建审批请求时由 core 计算的警告(ADR 0016 第 8 节);只能依据 core 已知的事实。 */
+    warnings?: (input: unknown, context: ToolContext) => ApprovalWarning[];
     execute(input: unknown, context: ToolContext): Promise<unknown>;
 }

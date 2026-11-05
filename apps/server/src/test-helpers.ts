@@ -8,10 +8,10 @@ import { join } from 'node:path';
 import { Writable } from 'node:stream';
 import { EventBus, RunManager } from '@ai-personal/agent';
 import { createProvider, type ModelProvider, Redactor, SecretStore } from '@ai-personal/providers';
-import { createRepositories, openStorage, type Repositories } from '@ai-personal/storage';
+import { type Connection, createRepositories, openStorage, type Repositories } from '@ai-personal/storage';
 import type { WebFetchOptions } from '@ai-personal/tools';
 import { createItemService, createKnowledgeBase, type KnowledgeBase } from '@ai-personal/items';
-import { createSummarizer, createToolRegistry } from './agent-setup.js';
+import { createMailComplete, createSummarizer, createToolRegistry } from './agent-setup.js';
 import { createApp, type AppDeps } from './app.js';
 import { createMemoryStack } from './memory-setup.js';
 import { itemProviders } from './memory-provider.js';
@@ -34,6 +34,8 @@ export interface TestServer {
     kb: KnowledgeBase;
     dir: string;
     repos: Repositories;
+    /** 测试中直接读写数据库(模拟其他客户端的修改)。 */
+    conn: Connection;
     /** 本测试期间写出的全部日志行。 */
     logs: string[];
     cleanup(): Promise<void>;
@@ -84,6 +86,10 @@ export async function createTestServer(
     const providerFor = (profile: Parameters<typeof createProvider>[0]) =>
         options.provider ?? createProvider(profile, providerDeps);
     const embeddings = createEmbeddingService({ repos, providerFor, redact: (text) => redactor.redact(text) });
+    // 测试中邮件任务默认不允许真的连网
+    const mailRunner: MailJobRunner =
+        options.mailRunner ??
+        (() => Promise.reject(new Error('no mail runner in this test; pass mailRunner to createTestServer')));
     const memory = createMemoryStack(repos, embeddings);
     const kb = createKnowledgeBase({ repos, vectors: embeddings });
     const items = createItemService({
@@ -97,7 +103,11 @@ export async function createTestServer(
         bus,
         persistIntervalMs: 0,
         providerFor,
-        tools: createToolRegistry(memory, repos, items, kb, options.webFetch ? { webFetch: options.webFetch } : {}),
+        tools: createToolRegistry(memory, repos, items, kb, options.webFetch ? { webFetch: options.webFetch } : {}, {
+            runner: mailRunner,
+            secret: (ref) => secrets.resolve(ref),
+            complete: createMailComplete(repos, providerFor),
+        }),
         redact: (text) => redactor.redact(text),
         ...(options.approvalTimeoutMs ? { approvalTimeoutMs: options.approvalTimeoutMs } : {}),
         summarize: createSummarizer(repos, providerFor),
@@ -113,7 +123,7 @@ export async function createTestServer(
         repos,
         secrets,
         redact: (text) => redactor.redact(text),
-        ...(options.mailRunner ? { runner: options.mailRunner } : {}),
+        runner: mailRunner,
     });
     const app = createApp({
         mcp,
@@ -147,6 +157,7 @@ export async function createTestServer(
         kb,
         dir,
         repos,
+        conn,
         logs,
         async cleanup() {
             mcp.closeAll();

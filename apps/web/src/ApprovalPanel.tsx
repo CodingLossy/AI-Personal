@@ -7,7 +7,7 @@ import { api } from './api.js';
 import { ApprovalActions } from './ApprovalActions.js';
 import { useI18n } from './i18n.js';
 import { navigate } from './router.js';
-import { show } from './ToolCard.js';
+import { ApprovalWarnings, show } from './ToolCard.js';
 
 /** 兜底轮询间隔:WebSocket 断开时也能看到新的审批请求。 */
 const POLL_MS = 15_000;
@@ -66,9 +66,14 @@ export function ApprovalPanel({ currentSessionId }: { currentSessionId: string |
             {open ? (
                 <ul className="list">
                     {others.map((a) => (
-                        <li key={a.callId} className="card tool-card pending" data-call-id={a.callId}>
+                        <li
+                            key={a.callId}
+                            className={`card tool-card pending${a.warnings?.length ? ' warned' : ''}`}
+                            data-call-id={a.callId}
+                        >
                             <div className="tool-title">{t('tool.call', { name: a.toolName })}</div>
                             <p className="tool-summary">{a.summary}</p>
+                            <ApprovalWarnings warnings={a.warnings} />
                             <details>
                                 <summary className="small muted">input</summary>
                                 <pre>{show(a.input)}</pre>

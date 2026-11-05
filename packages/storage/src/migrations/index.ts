@@ -11,6 +11,7 @@ import { migration0006 } from './0006_knowledge_base.js';
 import { migration0007 } from './0007_memory_v2.js';
 import { migration0008 } from './0008_kb_roots.js';
 import { migration0009 } from './0009_mail.js';
+import { migration0010 } from './0010_approval_warnings.js';
 
 /** 按 id 顺序排列的全部迁移;新增迁移追加在末尾,已发布的迁移不得修改。 */
 export const migrations: readonly Migration[] = [
@@ -23,4 +24,5 @@ export const migrations: readonly Migration[] = [
     migration0007,
     migration0008,
     migration0009,
+    migration0010,
 ];

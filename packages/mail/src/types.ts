@@ -96,3 +96,32 @@ export interface ImapSession {
     fetchMessages(uids: number[]): Promise<ParsedMessage[]>;
     close(): Promise<void>;
 }
+
+/** 一封要发送的邮件(ADR 0016 第 6 节):内容来自已保存的草稿,附件已由服务器校验过来源。 */
+export interface SendInput {
+    smtp: ImapConnectOptions;
+    /** 下载被回复邮件的附件、APPEND 到「已发送」时用。 */
+    imap: ImapConnectOptions;
+    from: MailAddress;
+    to: string[];
+    cc: string[];
+    subject: string;
+    text: string;
+    inReplyTo: string | null;
+    references: string[];
+    /** 被回复邮件中的附件:按文件夹 + UID + 正文部分编号下载。 */
+    mailAttachments: { folderPath: string; uid: number; part: string; filename: string; contentType: string }[];
+    /** 授权目录中的文件(绝对路径,已校验)。 */
+    fileAttachments: { path: string; filename: string }[];
+    /** 「已发送」文件夹;为 null 时不 APPEND。 */
+    appendTo: string | null;
+}
+
+export interface SendOutput {
+    messageId: string;
+    accepted: string[];
+    rejected: string[];
+    appended: boolean;
+    /** APPEND 失败的原因(发送本身已经成功)。 */
+    appendError: string | null;
+}

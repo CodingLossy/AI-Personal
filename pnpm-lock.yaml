@@ -217,6 +217,12 @@ importers:
       '@ai-personal/shared':
         specifier: workspace:*
         version: link:../shared
+      '@ai-personal/storage':
+        specifier: workspace:*
+        version: link:../storage
+      '@ai-personal/tools':
+        specifier: workspace:*
+        version: link:../tools
       imapflow:
         specifier: ^2.10.2
         version: 2.10.2
@@ -226,6 +232,9 @@ importers:
       nodemailer:
         specifier: ^10.3.1
         version: 10.3.1
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       '@types/mailparser':
         specifier: ^3.9.0
