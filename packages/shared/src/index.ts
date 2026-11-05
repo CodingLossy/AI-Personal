@@ -9,6 +9,7 @@ export * from './events.js';
 export * from './fs.js';
 export * from './items.js';
 export * from './kb.js';
+export * from './mail.js';
 export * from './mcp.js';
 export * from './memory.js';
 export * from './meta.js';

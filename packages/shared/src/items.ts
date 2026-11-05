@@ -10,6 +10,13 @@ import { MAX_PAGE_LIMIT } from './pagination.js';
 export const ItemRel = z.enum(['contains', 'mentions', 'derived', 'supersedes', 'forked_from']);
 export type ItemRel = z.infer<typeof ItemRel>;
 
+/**
+ * 已知的 items.source(提供者 id);mail 自 M3 起使用(ADR 0016 第 8 节)。
+ * Item.source 仍是字符串:以后新增提供者时,旧客户端不会因为不认识的值而解析失败。
+ */
+export const ItemSource = z.enum(['files', 'novels', 'sessions', 'memory', 'mail']);
+export type ItemSource = z.infer<typeof ItemSource>;
+
 export const ItemKind = z.enum(['category', 'content']);
 export type ItemKind = z.infer<typeof ItemKind>;
 

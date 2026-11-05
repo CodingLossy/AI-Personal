@@ -4,7 +4,7 @@
 import { z } from 'zod';
 import { Id, IsoDateTime, Usage } from './common.js';
 import { ProblemDetails } from './errors.js';
-import { ToolRisk } from './tools.js';
+import { ApprovalWarning, ToolRisk } from './tools.js';
 
 export const AssistantState = z.enum(['idle', 'listening', 'thinking', 'speaking', 'executing']);
 export type AssistantState = z.infer<typeof AssistantState>;
@@ -34,6 +34,8 @@ export const AgentEvent = z.discriminatedUnion('type', [
         toolName: z.string().optional(),
         risk: ToolRisk.optional(),
         expiresAt: IsoDateTime.optional(),
+        /** 自 M3 起提供(ADR 0016 第 8 节);没有警告时省略。 */
+        warnings: z.array(ApprovalWarning).max(20).optional(),
     }),
     z.object({
         type: z.literal('approval-resolved'),

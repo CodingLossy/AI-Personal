@@ -76,6 +76,20 @@ export const ApprovalStatus = z.enum(['pending', 'approved', 'rejected', 'expire
 export type ApprovalStatus = z.infer<typeof ApprovalStatus>;
 
 /** 持久化的审批请求;summary 与 input 来自模型,客户端须按不可信的纯文本显示。 */
+/**
+ * 已知的审批警告代码(ADR 0016 第 8 节)。ApprovalWarning.code 是字符串,以后新增代码不会成为破坏性修改。
+ * recipient_untrusted:会话读过不可信内容后,mail.send 的收件人不来自主人的消息或被回复邮件的发件人。
+ */
+export const ApprovalWarningCode = z.enum(['recipient_untrusted']);
+export type ApprovalWarningCode = z.infer<typeof ApprovalWarningCode>;
+
+/** 审批警告:由 core 生成,message 不含模型或外部内容提供的文字;UI 有警告时标红。 */
+export const ApprovalWarning = z.object({
+    code: z.string().min(1).max(64),
+    message: z.string().max(500),
+});
+export type ApprovalWarning = z.infer<typeof ApprovalWarning>;
+
 export const ApprovalRequest = z.object({
     callId: z.string(),
     runId: Id,
@@ -91,6 +105,8 @@ export const ApprovalRequest = z.object({
     createdAt: IsoDateTime,
     expiresAt: IsoDateTime,
     decidedAt: IsoDateTime.nullable(),
+    /** 自 M3 起提供(ADR 0016 第 8 节);没有警告时省略。 */
+    warnings: z.array(ApprovalWarning).max(20).optional(),
 });
 export type ApprovalRequest = z.infer<typeof ApprovalRequest>;
 
