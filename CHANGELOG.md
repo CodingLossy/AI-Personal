@@ -18,7 +18,7 @@ All notable user-visible changes are listed here. The format follows [Keep a Cha
   - the IMAP `ID` command is sent after login, which 163 requires;
   - headers, a plain-text body and the attachment index are cached locally; attachments are only downloaded when you ask;
   - sync runs in a short-lived child process, so idle memory stays the same when no account is configured.
-- **Mail tools** ([#37](https://github.com/CodingLossy/AI-Personal/pull/37)): `mail.list` (including "unread today"), `mail.search`, `mail.read` and `mail.summarize` (read, output marked as untrusted), `mail.draft` (saves a local draft) and `mail.send` (sends a saved draft only, needs your approval every time and can't be pre-authorized). If a draft changes while its approval is pending, the approval is cancelled. Sent mail is appended to the server's Sent folder.
+- **Mail tools** ([#37](https://github.com/CodingLossy/AI-Personal/pull/37)): `mail.list` (including "unread today"), `mail.search`, `mail.read` and `mail.summarize` (read, output marked as untrusted), `mail.draft` (saves a local draft) and `mail.send` (sends a saved draft only, needs your approval every time and can't be pre-authorized). If a draft changes while its approval is pending, the approval is cancelled. After sending, a copy goes to the server's Sent folder, either saved by the server itself or appended by AI-Personal (see Fixed below).
 - **Session-level taint** ([#37](https://github.com/CodingLossy/AI-Personal/pull/37)): once any tool in a session returns untrusted content (web, files or mail), the whole session stays tainted, also after a restart. In a tainted session conditional pre-authorizations no longer apply (so `memory.write` always asks), and a recipient that neither you typed in the session nor is the sender of the mail being answered gets a red `recipient_untrusted` warning on the approval card.
 - `pnpm eval` also runs 14 mail injection cases.
 - **Mail in the knowledge map and the Web UI** ([#38](https://github.com/CodingLossy/AI-Personal/pull/38)):
@@ -30,8 +30,17 @@ All notable user-visible changes are listed here. The format follows [Keep a Cha
 
 #### Fixed
 
-- Sending from a 163 account no longer saves the message to Sent twice. 163 already saves mail sent over SMTP, so the 163 preset now has `appendToSent` off, and AI-Personal never appends a copy for `imap.163.com` or `imap.gmail.com`, including accounts created with the old preset. A duplicate that was already saved stays on the server.
+- Sending from a 163 account no longer leaves two copies in Sent. 163 (like Gmail) saves mail sent over SMTP by itself, and AI-Personal also appended its own copy. Accounts now have a Sent copy setting, `sentCopy` (ADR 0016 §14):
+  - `auto` (the default): no copy is appended for `imap.163.com` and `imap.gmail.com`, because the server keeps one; every other host, including your own, gets a copy appended;
+  - `append` or `off`: always or never append a copy, on any host. Setting `appendToSent` to `true` or `false` sets these too, and what you set explicitly is never overridden by the host.
+  - The account response shows `sentCopy` and, in `appendToSent`, whether AI-Personal will append a copy for that account.
+  - In the result of `mail.send`, `savedToSent` only means that AI-Personal's own append succeeded. A copy the server saves by itself is not checked. The new `sentCopy` field says what happened: `append`, `append-failed`, `server`, `off` or `no-sent-folder`.
+  - A duplicate that was already saved stays on the server.
 - A message that is in both Inbox and Sent (for example one you sent to yourself) now shows up in both the Inbox and the Sent filters, and in "unread today".
+
+#### Upgrading
+
+- Existing accounts can't tell a default from a choice, so `appendToSent: true` becomes `sentCopy: auto` and `false` becomes `off`. Only 163 and Gmail accounts that had `true` stop appending; to keep appending there, set `sentCopy` to `append`.
 
 #### Notes
 
@@ -143,12 +152,13 @@ All notable user-visible changes are listed here. The format follows [Keep a Cha
 
 - **邮件账户**(ADR 0016):在「设置 → 邮件账户」添加 IMAP/SMTP 账户,有 QQ、163、Gmail 预设;密码(应用专用密码或授权码)只能用 `env:NAME` 或 `file:NAME` 引用,不存明文;只支持 TLS 与 STARTTLS,不支持 OAuth;「测试连接」分别检查 IMAP 与 SMTP 登录,不发信。
 - **同步**:默认每 5 分钟同步收件箱与已发送,首次只拉最近 30 天(`initialSyncDays`);已读状态与删除跟随服务器,读取正文一律用 `BODY.PEEK`,不会把邮件标为已读;登录后发送 IMAP `ID` 命令(163 需要);本地缓存邮件头、纯文本正文与附件索引,附件只在你要求时下载;同步在短时的子进程中进行,没有配置账户时空闲内存不变。
-- **邮件工具**:`mail.list`(含「今天未读」)、`mail.search`、`mail.read`、`mail.summarize`(只读,输出标为不可信)、`mail.draft`(只存本地草稿)与 `mail.send`(只发送已保存的草稿,每次都要你批准,不能预授权)。审批等待期间草稿被修改时,原审批作废。发出的邮件会 APPEND 到服务器的「已发送」。
+- **邮件工具**:`mail.list`(含「今天未读」)、`mail.search`、`mail.read`、`mail.summarize`(只读,输出标为不可信)、`mail.draft`(只存本地草稿)与 `mail.send`(只发送已保存的草稿,每次都要你批准,不能预授权)。审批等待期间草稿被修改时,原审批作废。发出后「已发送」中的副本由服务器自动保存或由 AI-Personal APPEND(见下方「修复」)。
 - **会话级污染**:会话中只要有工具返回过不可信内容(网页、文件或邮件),整个会话就一直视为被污染,重启后仍然有效。被污染的会话中条件预授权全部失效(`memory.write` 一定要审批);收件人既不是你在本会话中亲自输入的地址、也不是被回复邮件的发件人时,审批卡片会标红显示 `recipient_untrusted` 警告。
 - `pnpm eval` 增加 14 条邮件注入用例。
 - **知识地图与 Web 中的邮件**:知识地图显示「邮件 → 账户 → 文件夹 → 会话串 → 邮件」,正文不进条目搜索;新的「邮件」页可按账户与文件夹浏览、立即同步、查看纯文本正文,以及查看、修改、删除草稿;附件(`.md`、`.txt`、`.pdf`、`.docx`、`.xlsx`,不超过 20 MB)可「加入知识库」,与文件相同地做凭据检测后供 `kb.search` 检索,只保存分块;单封邮件上的「问 AI」新建一个从一开始就视为被污染的会话,预填的提示只含邮件 id。
 - 新增 `/mail` 下的端点:预设、账户(含文件夹、测试与同步)、邮件、问 AI、附件加入知识库与草稿。
-- **修复**:用 163 账户发信不再在「已发送」中保存两份。163 会自动保存经 SMTP 发出的邮件,所以 163 预设改为关闭 `appendToSent`,并且对 `imap.163.com` 与 `imap.gmail.com` 一律不 APPEND(按旧预设创建的账户也是如此);已经产生的重复不会自动删除。同时在收件箱与已发送中的邮件(例如发给自己的)现在在两边的筛选以及「今天未读」中都能看到。
+- **修复**:用 163 账户发信后「已发送」不再有两份。163(与 Gmail 一样)会由服务器自动保存经 SMTP 发出的邮件,AI-Personal 又 APPEND 了一份。账户新增「已发送」副本策略 `sentCopy`(ADR 0016 第 14 节):默认 `auto`,对 `imap.163.com` 与 `imap.gmail.com` 不 APPEND(交给服务器),其他主机(含自定义主机)APPEND;`append` / `off` 在任何主机上总是 / 从不 APPEND,`appendToSent` 设为 `true` / `false` 等同于它们,显式设置不会被主机覆盖。账户响应带 `sentCopy`,`appendToSent` 表示该账户发送后 AI-Personal 是否会 APPEND。`mail.send` 结果中的 `savedToSent` 只表示 AI-Personal 自己的 APPEND 成功,服务器自动保存的那一份不核实;新字段 `sentCopy` 说明这一次的处理(`append`、`append-failed`、`server`、`off`、`no-sent-folder`)。已经产生的重复不会自动删除。
+- **升级**:旧账户分不清默认值与用户选择,`appendToSent: true` 记为 `auto`,`false` 记为 `off`;只有 163 / Gmail 上原为 `true` 的账户停止 APPEND,需要时把 `sentCopy` 设为 `append`。同时在收件箱与已发送中的邮件(例如发给自己的)现在在两边的筛选以及「今天未读」中都能看到。
 - 说明:「今天」按服务器时区(容器的 `TZ`)计算;用「总是允许」保存的预授权(如某目录的 `fs.write`)在被污染的会话中仍然有效,请谨慎设置;联系人与「人物」推迟到 M5,Gmail/Outlook OAuth、IDLE、HTML 富渲染、定时摘要、标为已读等写操作、其他文件夹与附件自动入库推迟;无邮件账户时 CI 中 Docker 镜像空闲内存为 110 MiB(门禁 120 MiB)。自检报告见 [docs/milestones/M3-self-check.md](docs/milestones/M3-self-check.md)。
 
 ### M2 · 工具与文件(2026-11-05)
