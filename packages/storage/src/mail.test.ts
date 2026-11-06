@@ -3,6 +3,9 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { MailFolderSync, MailMessageSync } from './mail.js';
+import { openDatabase } from './db.js';
+import { migrate } from './migrate.js';
+import { migrations } from './migrations/index.js';
 import { createTestDb, fakeClock, type TestDb } from './test-helpers.js';
 
 let t: TestDb;
@@ -65,6 +68,61 @@ function folder(path: string, over: Partial<MailFolderSync> = {}): MailFolderSyn
         ...over,
     };
 }
+
+describe('「已发送」副本策略', () => {
+    it('迁移 0011:旧的 append_to_sent=1 记为 auto,=0 记为显式 off;新建与修改时显式选择优先', async () => {
+        const raw = openDatabase(':memory:');
+        try {
+            await migrate(
+                raw.sqlite,
+                migrations.filter((m) => m.id <= 10),
+            );
+            raw.sqlite
+                .prepare(
+                    `INSERT INTO owners (id, username, password_hash, created_at, updated_at) VALUES ('o', 'o', 'x', 't', 't')`,
+                )
+                .run();
+            const insert = raw.sqlite.prepare(
+                `INSERT INTO mail_accounts (id, owner_id, label, address, username, password_ref, imap_json, smtp_json,
+                   initial_sync_days, sync_interval_minutes, append_to_sent, enabled, created_at, updated_at)
+                 VALUES (?, 'o', 'l', 'a@163.com', 'a@163.com', 'env:X', ?, '{}', 30, 5, ?, 1, 't', 't')`,
+            );
+            insert.run('old-on', JSON.stringify({ host: 'imap.163.com' }), 1);
+            insert.run('old-off', JSON.stringify({ host: 'imap.163.com' }), 0);
+            insert.run('old-custom', JSON.stringify({ host: 'mail.example.org' }), 1);
+            await migrate(raw.sqlite, migrations);
+            const modes = raw.sqlite.prepare(`SELECT id, sent_copy AS m FROM mail_accounts ORDER BY id`).all();
+            expect(modes).toEqual([
+                { id: 'old-custom', m: 'auto' },
+                { id: 'old-off', m: 'off' },
+                { id: 'old-on', m: 'auto' },
+            ]);
+        } finally {
+            raw.close();
+        }
+
+        const { mail } = t.repos;
+        const base = mail.get(t.ownerId, accountId)!;
+        // beforeEach 里显式传了 appendToSent: true
+        expect(base.sentCopy).toBe('append');
+        const withoutChoice = {
+            label: 'x',
+            address: 'me@example.com',
+            username: 'me@example.com',
+            passwordRef: 'env:MAIL_PW',
+            imap: server,
+            smtp: server,
+            initialSyncDays: 30,
+            syncIntervalMinutes: 5,
+            enabled: true,
+        };
+        expect(mail.create(t.ownerId, withoutChoice).sentCopy).toBe('auto');
+        expect(mail.create(t.ownerId, { ...withoutChoice, appendToSent: true, sentCopy: 'off' }).sentCopy).toBe('off');
+        expect(mail.update(t.ownerId, accountId, { appendToSent: false })?.sentCopy).toBe('off');
+        expect(mail.update(t.ownerId, accountId, { enabled: false })?.sentCopy).toBe('off');
+        expect(mail.update(t.ownerId, accountId, { sentCopy: 'auto' })?.sentCopy).toBe('auto');
+    });
+});
 
 describe('邮件缓存', () => {
     it('同一 Message-ID 只存一份;已读变化与删除只影响对应文件夹,不再出现在任何文件夹的邮件被清理', () => {

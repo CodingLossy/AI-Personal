@@ -32,9 +32,12 @@ describe('邮件契约', () => {
         expect(MailAccountInput.parse(account)).toMatchObject({
             initialSyncDays: 30,
             syncIntervalMinutes: 5,
-            appendToSent: true,
             enabled: true,
         });
+        // 不给 appendToSent / sentCopy 时不补默认值:策略为 auto,由服务器按主机决定(ADR 0016 第 14 节)
+        expect(MailAccountInput.parse(account)).not.toHaveProperty('appendToSent');
+        expect(MailAccountInput.parse(account)).not.toHaveProperty('sentCopy');
+        expect(MailAccountInput.safeParse({ ...account, sentCopy: 'always' }).success).toBe(false);
         expect(MailAccountInput.safeParse({ ...account, password: 'hunter22' }).success).toBe(false);
         expect(MailAccountPatch.safeParse({ password: 'hunter22' }).success).toBe(false);
         expect(MailAccountPatch.parse({ label: '个人邮箱' })).toEqual({ label: '个人邮箱' });
@@ -66,6 +69,8 @@ describe('邮件契约', () => {
             initialSyncDays: 30,
             syncIntervalMinutes: 5,
             enabled: true,
+            sentCopy: 'auto',
+            appendToSent: false,
             passwordStatus: 'missing',
             lastSyncedAt: null,
             lastError: null,

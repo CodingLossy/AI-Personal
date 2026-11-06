@@ -29939,8 +29939,15 @@
                             "default": 5
                           },
                           "appendToSent": {
-                            "type": "boolean",
-                            "default": true
+                            "type": "boolean"
+                          },
+                          "sentCopy": {
+                            "type": "string",
+                            "enum": [
+                              "auto",
+                              "append",
+                              "off"
+                            ]
                           },
                           "enabled": {
                             "type": "boolean",
@@ -29987,6 +29994,8 @@
                           "passwordRef",
                           "imap",
                           "smtp",
+                          "appendToSent",
+                          "sentCopy",
                           "id",
                           "passwordStatus",
                           "lastSyncedAt",
@@ -30309,8 +30318,15 @@
                     "default": 5
                   },
                   "appendToSent": {
-                    "type": "boolean",
-                    "default": true
+                    "type": "boolean"
+                  },
+                  "sentCopy": {
+                    "type": "string",
+                    "enum": [
+                      "auto",
+                      "append",
+                      "off"
+                    ]
                   },
                   "enabled": {
                     "type": "boolean",
@@ -30429,8 +30445,15 @@
                       "default": 5
                     },
                     "appendToSent": {
-                      "type": "boolean",
-                      "default": true
+                      "type": "boolean"
+                    },
+                    "sentCopy": {
+                      "type": "string",
+                      "enum": [
+                        "auto",
+                        "append",
+                        "off"
+                      ]
                     },
                     "enabled": {
                       "type": "boolean",
@@ -30477,6 +30500,8 @@
                     "passwordRef",
                     "imap",
                     "smtp",
+                    "appendToSent",
+                    "sentCopy",
                     "id",
                     "passwordStatus",
                     "lastSyncedAt",
@@ -30896,8 +30921,15 @@
                       "default": 5
                     },
                     "appendToSent": {
-                      "type": "boolean",
-                      "default": true
+                      "type": "boolean"
+                    },
+                    "sentCopy": {
+                      "type": "string",
+                      "enum": [
+                        "auto",
+                        "append",
+                        "off"
+                      ]
                     },
                     "enabled": {
                       "type": "boolean",
@@ -30944,6 +30976,8 @@
                     "passwordRef",
                     "imap",
                     "smtp",
+                    "appendToSent",
+                    "sentCopy",
                     "id",
                     "passwordStatus",
                     "lastSyncedAt",
@@ -31360,6 +31394,14 @@
                   "appendToSent": {
                     "type": "boolean"
                   },
+                  "sentCopy": {
+                    "type": "string",
+                    "enum": [
+                      "auto",
+                      "append",
+                      "off"
+                    ]
+                  },
                   "enabled": {
                     "type": "boolean"
                   }
@@ -31468,8 +31510,15 @@
                       "default": 5
                     },
                     "appendToSent": {
-                      "type": "boolean",
-                      "default": true
+                      "type": "boolean"
+                    },
+                    "sentCopy": {
+                      "type": "string",
+                      "enum": [
+                        "auto",
+                        "append",
+                        "off"
+                      ]
                     },
                     "enabled": {
                       "type": "boolean",
@@ -31516,6 +31565,8 @@
                     "passwordRef",
                     "imap",
                     "smtp",
+                    "appendToSent",
+                    "sentCopy",
                     "id",
                     "passwordStatus",
                     "lastSyncedAt",

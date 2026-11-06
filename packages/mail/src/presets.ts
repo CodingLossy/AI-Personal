@@ -2,7 +2,7 @@
 // Copyright (C) 2026 尹绪柏 (Theodore Yin)
 
 // 常见邮箱的默认服务器与授权码说明(开发计划 M3 第 1 条;ADR 0016 第 1 节)。
-import type { MailPreset } from '@ai-personal/shared';
+import type { MailPreset, MailSentCopy } from '@ai-personal/shared';
 
 export const MAIL_PRESETS: readonly MailPreset[] = [
     {
@@ -33,18 +33,35 @@ export const MAIL_PRESETS: readonly MailPreset[] = [
     },
 ];
 
-/** 经 SMTP 发信后会自动把邮件存进「已发送」的 IMAP 服务器;对它们 APPEND 只会产生重复。 */
-const SERVERS_THAT_SAVE_SENT = new Set(['imap.163.com', 'imap.gmail.com']);
+/** 经 SMTP 发信后会自动把邮件存进「已发送」的 IMAP 服务器;`auto` 策略对它们不 APPEND,否则会有两份。 */
+const SERVERS_THAT_SAVE_SENT: ReadonlySet<string> = new Set(['imap.163.com', 'imap.gmail.com']);
+
+/** 这个 IMAP 主机是否已知会自动保存经 SMTP 发出的邮件。 */
+export function serverSavesSent(imapHost: string): boolean {
+    return SERVERS_THAT_SAVE_SENT.has(imapHost.trim().toLowerCase());
+}
+
+/** 按策略与主机,发送成功后 AI-Personal 是否 APPEND 一份(ADR 0016 第 14 节)。显式的 `append` / `off` 总是生效。 */
+export function appendsToSent(account: { sentCopy: MailSentCopy; imap: { host: string } }): boolean {
+    if (account.sentCopy === 'auto') return !serverSavesSent(account.imap.host);
+    return account.sentCopy === 'append';
+}
 
 /**
- * 发送成功后要 APPEND 到的文件夹;不需要时为 null。
- * 账户的 `appendToSent` 为 true 但服务器本来就会自动保存时也不 APPEND,
- * 这样按旧预设创建的 163 账户不会再产生重复。
+ * 发送前决定「已发送」副本怎么处理:
+ * - `append`:AI-Personal 把发出的原文 APPEND 到 `folder`;
+ * - `server`:`auto` 策略且主机会自动保存,不 APPEND(服务器那一份不经过也不核实);
+ * - `off`:账户关闭了 APPEND;
+ * - `no-sent-folder`:要 APPEND 但还没同步到「已发送」文件夹。
  */
-export function sentCopyFolder(
-    account: { appendToSent: boolean; imap: { host: string } },
+export type SentCopyPlan =
+    { action: 'append'; folder: string } | { action: 'server' | 'off' | 'no-sent-folder'; folder: null };
+
+export function planSentCopy(
+    account: { sentCopy: MailSentCopy; imap: { host: string } },
     sentFolder: string | null,
-): string | null {
-    if (!account.appendToSent || !sentFolder) return null;
-    return SERVERS_THAT_SAVE_SENT.has(account.imap.host.trim().toLowerCase()) ? null : sentFolder;
+): SentCopyPlan {
+    if (account.sentCopy === 'off') return { action: 'off', folder: null };
+    if (!appendsToSent(account)) return { action: 'server', folder: null };
+    return sentFolder ? { action: 'append', folder: sentFolder } : { action: 'no-sent-folder', folder: null };
 }

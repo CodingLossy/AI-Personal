@@ -18,7 +18,7 @@ import { resolveInRoots, type ToolContext, type ToolDefinition } from '@ai-perso
 import { statSync } from 'node:fs';
 import { z } from 'zod';
 import type { MailJobRunner } from './run.js';
-import { sentCopyFolder } from './presets.js';
+import { planSentCopy } from './presets.js';
 
 /** 交给模型的正文上限(字符)。 */
 export const MAX_READ_CHARS = 20_000;
@@ -473,6 +473,7 @@ export function createMailTools(options: MailToolOptions): ToolDefinition[] {
             const references = original
                 ? [...original.references, ...(original.messageId ? [original.messageId] : [])].slice(-50)
                 : [];
+            const sentCopy = planSentCopy(acct, repos.mailCache.sentFolder(acct.id));
             const result = await options.runner({
                 kind: 'send',
                 input: {
@@ -487,7 +488,7 @@ export function createMailTools(options: MailToolOptions): ToolDefinition[] {
                     references,
                     mailAttachments,
                     fileAttachments,
-                    appendTo: sentCopyFolder(acct, repos.mailCache.sentFolder(acct.id)),
+                    appendTo: sentCopy.folder,
                 },
             });
             repos.mailCache.deleteDraft(d.id);
@@ -496,7 +497,9 @@ export function createMailTools(options: MailToolOptions): ToolDefinition[] {
                 messageId: result.messageId,
                 accepted: result.accepted,
                 rejected: result.rejected,
+                // 只表示 AI-Personal 自己 APPEND 成功;服务器自动保存的那一份不算,也不核实(ADR 0016 第 14 节)
                 savedToSent: result.appended,
+                sentCopy: sentCopy.action === 'append' && !result.appended ? 'append-failed' : sentCopy.action,
                 ...(result.appendError ? { saveToSentError: result.appendError } : {}),
             };
         },

@@ -220,6 +220,7 @@ export const TABLE_COLUMNS = {
         'next_sync_at',
         'created_at',
         'updated_at',
+        'sent_copy',
     ],
     mail_folders: [
         'id',

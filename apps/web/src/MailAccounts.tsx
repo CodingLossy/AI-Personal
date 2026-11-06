@@ -59,7 +59,7 @@ export function MailAccounts() {
                 passwordRef: passwordRef.trim(),
                 imap: chosen.imap,
                 smtp: chosen.smtp,
-                appendToSent: chosen.appendToSent,
+                // 不传 appendToSent / sentCopy:策略为 auto,由服务器按主机决定(ADR 0016 第 14 节)
             });
             setLabel('');
             setAddress('');
