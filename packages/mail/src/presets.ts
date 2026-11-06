@@ -18,7 +18,8 @@ export const MAIL_PRESETS: readonly MailPreset[] = [
         label: '网易 163 邮箱',
         imap: { host: 'imap.163.com', port: 993, security: 'tls' },
         smtp: { host: 'smtp.163.com', port: 465, security: 'tls' },
-        appendToSent: true,
+        // 163 经 SMTP 发出的邮件会自动保存到「已发送」;再 APPEND 会多出一份(同一 Message-ID 两个 UID)
+        appendToSent: false,
         help: '在 163 邮箱网页版「设置 → POP3/SMTP/IMAP」中开启 IMAP/SMTP 服务并设置客户端授权码;密码处填授权码的引用。',
     },
     {
@@ -31,3 +32,19 @@ export const MAIL_PRESETS: readonly MailPreset[] = [
         help: '在 Google 账号中开启两步验证,然后在「应用专用密码」中生成一个密码;密码处填它的引用。不支持 OAuth 登录。',
     },
 ];
+
+/** 经 SMTP 发信后会自动把邮件存进「已发送」的 IMAP 服务器;对它们 APPEND 只会产生重复。 */
+const SERVERS_THAT_SAVE_SENT = new Set(['imap.163.com', 'imap.gmail.com']);
+
+/**
+ * 发送成功后要 APPEND 到的文件夹;不需要时为 null。
+ * 账户的 `appendToSent` 为 true 但服务器本来就会自动保存时也不 APPEND,
+ * 这样按旧预设创建的 163 账户不会再产生重复。
+ */
+export function sentCopyFolder(
+    account: { appendToSent: boolean; imap: { host: string } },
+    sentFolder: string | null,
+): string | null {
+    if (!account.appendToSent || !sentFolder) return null;
+    return SERVERS_THAT_SAVE_SENT.has(account.imap.host.trim().toLowerCase()) ? null : sentFolder;
+}

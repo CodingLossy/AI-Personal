@@ -18,6 +18,7 @@ import { resolveInRoots, type ToolContext, type ToolDefinition } from '@ai-perso
 import { statSync } from 'node:fs';
 import { z } from 'zod';
 import type { MailJobRunner } from './run.js';
+import { sentCopyFolder } from './presets.js';
 
 /** 交给模型的正文上限(字符)。 */
 export const MAX_READ_CHARS = 20_000;
@@ -486,7 +487,7 @@ export function createMailTools(options: MailToolOptions): ToolDefinition[] {
                     references,
                     mailAttachments,
                     fileAttachments,
-                    appendTo: acct.appendToSent ? repos.mailCache.sentFolder(acct.id) : null,
+                    appendTo: sentCopyFolder(acct, repos.mailCache.sentFolder(acct.id)),
                 },
             });
             repos.mailCache.deleteDraft(d.id);
