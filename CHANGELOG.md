@@ -28,6 +28,11 @@ All notable user-visible changes are listed here. The format follows [Keep a Cha
   - "Ask AI" on a message opens a new session that is tainted from the start, with a suggested prompt that names only the message id.
 - New endpoints under `/mail`: presets, accounts (with folders, test and sync), messages, ask, attachments to the knowledge base, and drafts.
 
+#### Fixed
+
+- Sending from a 163 account no longer saves the message to Sent twice. 163 already saves mail sent over SMTP, so the 163 preset now has `appendToSent` off, and AI-Personal never appends a copy for `imap.163.com` or `imap.gmail.com`, including accounts created with the old preset. A duplicate that was already saved stays on the server.
+- A message that is in both Inbox and Sent (for example one you sent to yourself) now shows up in both the Inbox and the Sent filters, and in "unread today".
+
 #### Notes
 
 - "Today" means today in the server's time zone (the container's `TZ`), not necessarily yours.
@@ -143,6 +148,7 @@ All notable user-visible changes are listed here. The format follows [Keep a Cha
 - `pnpm eval` 增加 14 条邮件注入用例。
 - **知识地图与 Web 中的邮件**:知识地图显示「邮件 → 账户 → 文件夹 → 会话串 → 邮件」,正文不进条目搜索;新的「邮件」页可按账户与文件夹浏览、立即同步、查看纯文本正文,以及查看、修改、删除草稿;附件(`.md`、`.txt`、`.pdf`、`.docx`、`.xlsx`,不超过 20 MB)可「加入知识库」,与文件相同地做凭据检测后供 `kb.search` 检索,只保存分块;单封邮件上的「问 AI」新建一个从一开始就视为被污染的会话,预填的提示只含邮件 id。
 - 新增 `/mail` 下的端点:预设、账户(含文件夹、测试与同步)、邮件、问 AI、附件加入知识库与草稿。
+- **修复**:用 163 账户发信不再在「已发送」中保存两份。163 会自动保存经 SMTP 发出的邮件,所以 163 预设改为关闭 `appendToSent`,并且对 `imap.163.com` 与 `imap.gmail.com` 一律不 APPEND(按旧预设创建的账户也是如此);已经产生的重复不会自动删除。同时在收件箱与已发送中的邮件(例如发给自己的)现在在两边的筛选以及「今天未读」中都能看到。
 - 说明:「今天」按服务器时区(容器的 `TZ`)计算;用「总是允许」保存的预授权(如某目录的 `fs.write`)在被污染的会话中仍然有效,请谨慎设置;联系人与「人物」推迟到 M5,Gmail/Outlook OAuth、IDLE、HTML 富渲染、定时摘要、标为已读等写操作、其他文件夹与附件自动入库推迟;无邮件账户时 CI 中 Docker 镜像空闲内存为 110 MiB(门禁 120 MiB)。自检报告见 [docs/milestones/M3-self-check.md](docs/milestones/M3-self-check.md)。
 
 ### M2 · 工具与文件(2026-11-05)
