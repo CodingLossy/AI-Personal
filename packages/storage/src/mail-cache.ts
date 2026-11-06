@@ -71,6 +71,14 @@ const MESSAGE_FROM = `FROM mail_messages m
     JOIN mail_message_folders mf ON mf.message_id = m.id
       AND mf.rowid = (SELECT min(x.rowid) FROM mail_message_folders x WHERE x.message_id = m.id)
     JOIN mail_folders f ON f.id = mf.folder_id`;
+// 按收件箱 / 已发送筛选时:取邮件在该类文件夹中的位置。不能先取第一个位置再筛选,
+// 否则同时在收件箱与已发送中的邮件(例如发给自己)只会出现在其中一边。
+const MESSAGE_FROM_FOLDER = `FROM mail_messages m
+    JOIN mail_accounts a ON a.id = m.account_id
+    JOIN mail_message_folders mf ON mf.message_id = m.id
+      AND mf.rowid = (SELECT min(x.rowid) FROM mail_message_folders x
+        JOIN mail_folders xf ON xf.id = x.folder_id WHERE x.message_id = m.id AND xf.special_use = @folder)
+    JOIN mail_folders f ON f.id = mf.folder_id`;
 
 function ftsMatch(query: string): string | null {
     const words = query.split(/\s+/).filter((w) => [...w].length >= 3);
@@ -200,13 +208,13 @@ export function createMailCacheRepository(conn: Connection, now: () => Date) {
         list(ownerId: string, query: MailListQuery): MailMessageRecord[] {
             const where = ['a.owner_id = @ownerId'];
             if (query.accountId) where.push('m.account_id = @accountId');
-            if (query.folder) where.push('f.special_use = @folder');
             if (query.unreadOnly) where.push('m.unread = 1');
             if (query.since) where.push('m.date >= @since');
             if (query.before) where.push('m.date < @before');
             const rows = sqlite
                 .prepare<Record<string, unknown>, MessageRow & { folderPath: string }>(
-                    `${MESSAGE_SELECT} ${MESSAGE_FROM} WHERE ${where.join(' AND ')} ORDER BY m.date DESC LIMIT @limit`,
+                    `${MESSAGE_SELECT} ${query.folder ? MESSAGE_FROM_FOLDER : MESSAGE_FROM}
+                     WHERE ${where.join(' AND ')} ORDER BY m.date DESC LIMIT @limit`,
                 )
                 .all({
                     ownerId,

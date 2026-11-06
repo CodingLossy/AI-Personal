@@ -108,6 +108,31 @@ describe('邮件缓存', () => {
         expect(hits.n).toBe(1);
     });
 
+    it('同一封邮件同时在收件箱与已发送中时,两边的筛选都能列出它(发给自己)', () => {
+        const { mail, mailCache } = t.repos;
+        mail.applySync(accountId, [
+            folder('INBOX', { lastUid: 3, messages: [msg(3, { messageId: 'self@example.com' })] }),
+            folder('Sent', { lastUid: 9, messages: [msg(9, { messageId: 'self@example.com' }), msg(8)] }),
+        ]);
+        const list = (f?: 'inbox' | 'sent') =>
+            mailCache.list(t.ownerId, { folder: f, limit: 50 }).map((m) => [m.messageId, m.folderPath]);
+        expect(list('sent').sort()).toEqual([
+            ['m8@example.com', 'Sent'],
+            ['self@example.com', 'Sent'],
+        ]);
+        expect(list('inbox')).toEqual([['self@example.com', 'INBOX']]);
+        // 不筛选时每封邮件仍只出现一次
+        expect(list()).toHaveLength(2);
+        // 「今天未读」走收件箱筛选:先到已发送的也不会漏
+        mail.applySync(accountId, [
+            folder('Sent', { lastUid: 10, messages: [msg(10, { messageId: 'later@example.com' })] }),
+            folder('INBOX', { lastUid: 4, messages: [msg(4, { messageId: 'later@example.com' })] }),
+        ]);
+        expect(
+            mailCache.list(t.ownerId, { folder: 'inbox', unreadOnly: true, limit: 50 }).map((m) => m.messageId),
+        ).toContain('later@example.com');
+    });
+
     it('UIDVALIDITY 变化时清空该文件夹后重建', () => {
         const { mail } = t.repos;
         mail.applySync(accountId, [folder('INBOX', { lastUid: 2, messages: [msg(1), msg(2)] })]);
