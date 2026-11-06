@@ -14,7 +14,7 @@ import {
     MailSyncResult,
     pageOf,
 } from '@ai-personal/shared';
-import { MAIL_PRESETS } from '@ai-personal/mail';
+import { appendsToSent, MAIL_PRESETS } from '@ai-personal/mail';
 import type { SecretStore } from '@ai-personal/providers';
 import type { MailAccountRecord, Repositories } from '@ai-personal/storage';
 import type { ItemService, KnowledgeBase } from '@ai-personal/items';
@@ -124,6 +124,7 @@ export function mailRoutes(deps: {
     const { repos, secrets, mail } = deps;
     const view = (a: MailAccountRecord): MailAccount => ({
         ...a,
+        appendToSent: appendsToSent(a),
         passwordStatus: secrets.status(a.passwordRef) === 'present' ? 'present' : 'missing',
     });
     const load = (ownerId: string, id: string) => {

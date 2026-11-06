@@ -4,7 +4,7 @@
 
 An AI assistant that is truly your own: self-hostable, open source, bring-your-own-model (BYO LLM), local-first, **telemetry-free**, and pluggable (MCP is a first-class citizen).
 
-> Status: **M2 · tools, local files and memory** (pre-release, not yet versioned). On top of M1's streamed chat it adds tools with risk-based approvals (files, web, MCP), documents and a knowledge base from the folders you authorize, a knowledge map, and long-term memory that can be superseded, carries trust labels, and can be corrected or forgotten. Usable from the Web UI, the command line or curl. See [CHANGELOG.md](CHANGELOG.md) for changes and the development plan (Chinese) at [docs/plan/AI-Personal-开发计划.md](docs/plan/AI-Personal-开发计划.md).
+> Status: **M3 · mail** (pre-release, not yet versioned). On top of M2's tools, local files, knowledge base and long-term memory it adds IMAP/SMTP mail: Inbox and Sent are synced, and the assistant can summarize mail, draft replies and send them after you approve. Instructions inside an e-mail can't make it send anything (session-level taint and recipient checks), and you can drill down to a message in the knowledge map and use "Ask AI" on it. Usable from the Web UI, the command line or curl. See [CHANGELOG.md](CHANGELOG.md) for changes and the development plan (Chinese) at [docs/plan/AI-Personal-开发计划.md](docs/plan/AI-Personal-开发计划.md).
 
 ## Features (planned)
 
@@ -50,6 +50,7 @@ pnpm dev
 
 - Core server: <http://127.0.0.1:8787/healthz>
 - Web UI: <http://127.0.0.1:5173>. Create the owner account when asked (1.0 has exactly one account), add a profile under Settings → Model profiles with the key reference `env:DEEPSEEK_API_KEY` (leave it empty for a local Ollama), and start chatting once it shows "Key: Set".
+- When you run it locally, the core server doesn't serve the Web UI by default: without `AIP_WEB_DIR`, <http://127.0.0.1:8787/> returns 404. That is expected; with `pnpm dev`, use port 5173. To serve the Web UI from port 8787 (for example after `pnpm build`, with `node apps/server/dist/index.js`), set `AIP_WEB_DIR` to the absolute path of `apps/web/dist` first. The Docker image already sets it.
 
 Instead of an environment variable, you can put keys in `secrets.yaml` in the data directory (`~/.ai-personal` by default, `%USERPROFILE%\.ai-personal` on Windows), one `NAME: value` per line, and reference them as `file:NAME`. Changes take effect without a restart.
 

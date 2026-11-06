@@ -4,7 +4,7 @@
 
 一个真正属于你自己的 AI 助手:可自托管、开源、自带模型(BYO LLM)、本地优先、**零遥测**、插件化(MCP 为一等公民)。
 
-> 当前状态:**M2 · 工具、本地文件与记忆**(预发布,尚未打版本)。在 M1 的流式对话之上,增加了按风险分级审批的工具(文件、网页、MCP)、授权目录中的文档与知识库、知识地图,以及能更替、带可信度说明、可以反馈与忘记的长期记忆;可用 Web UI / 命令行 / curl。更新记录见 [CHANGELOG.md](CHANGELOG.md),开发计划见 [docs/plan/AI-Personal-开发计划.md](docs/plan/AI-Personal-开发计划.md)。
+> 当前状态:**M3 · 邮件**(预发布,尚未打版本)。在 M2 的工具、本地文件、知识库与长期记忆之上,增加了 IMAP/SMTP 邮件:同步收件箱与已发送,让助手总结、起草回复,并在你批准后发送;邮件中的指令不能让助手发信(会话级污染与收件人检查);邮件可在知识地图中下钻并「问 AI」。可用 Web UI / 命令行 / curl。更新记录见 [CHANGELOG.md](CHANGELOG.md),开发计划见 [docs/plan/AI-Personal-开发计划.md](docs/plan/AI-Personal-开发计划.md)。
 
 ## 特性(规划中)
 
@@ -50,6 +50,7 @@ pnpm dev
 
 - 核心服务:<http://127.0.0.1:8787/healthz>
 - Web UI:<http://127.0.0.1:5173>。按提示创建主人账户(1.0 只有一个账户),到「设置 → 模型配置档」添加配置档,密钥引用填 `env:DEEPSEEK_API_KEY`(本地 Ollama 留空),看到「密钥: 已设置」后就可以开始对话。
+- 本地运行时核心服务默认不托管 Web UI:没有设置 `AIP_WEB_DIR` 时,<http://127.0.0.1:8787/> 返回 404,这是正常的,`pnpm dev` 下请用 5173 端口。想让 8787 端口直接提供 Web UI(例如 `pnpm build` 后用 `node apps/server/dist/index.js` 运行),先把 `AIP_WEB_DIR` 设为 `apps/web/dist` 的绝对路径。Docker 镜像已经设置好。
 
 不想用环境变量时,也可以把密钥写进数据目录(默认 `~/.ai-personal`,Windows 为 `%USERPROFILE%\.ai-personal`)下的 `secrets.yaml`,每行一个 `NAME: value`,配置档里引用 `file:NAME`。文件修改后立即生效,不需要重启。
 

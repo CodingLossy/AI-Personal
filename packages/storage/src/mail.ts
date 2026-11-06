@@ -2,14 +2,30 @@
 // Copyright (C) 2026 尹绪柏 (Theodore Yin)
 
 // 邮件账户、文件夹与本地缓存(ADR 0016)。账户只存密码引用;同步结果在一个事务里写入。
-import type { MailAccount, MailAccountInput, MailAccountPatch, MailAddress, MailFolder } from '@ai-personal/shared';
+import type {
+    MailAccount,
+    MailAccountInput,
+    MailAccountPatch,
+    MailAddress,
+    MailFolder,
+    MailSentCopy,
+} from '@ai-personal/shared';
 import type { Connection } from './db.js';
 import { newId } from './ids.js';
 
-export type MailAccountRecord = Omit<MailAccount, 'passwordStatus'>;
+/** 只存策略 `sentCopy`;响应里的 `appendToSent` 由服务器按策略与主机算出(ADR 0016 第 14 节)。 */
+export type MailAccountRecord = Omit<MailAccount, 'passwordStatus' | 'appendToSent'>;
 
-/** 已解析默认值的新建输入。 */
-export type MailAccountCreate = Required<MailAccountInput>;
+/** 已解析默认值的新建输入;`appendToSent` / `sentCopy` 都不给时策略为 `auto`。 */
+export type MailAccountCreate = Omit<Required<MailAccountInput>, 'appendToSent' | 'sentCopy'> &
+    Pick<MailAccountInput, 'appendToSent' | 'sentCopy'>;
+
+/** 输入里的显式选择:`sentCopy` 优先,其次是旧字段 `appendToSent`;都没给时为 undefined。 */
+function explicitSentCopy(input: Pick<MailAccountInput, 'appendToSent' | 'sentCopy'>): MailSentCopy | undefined {
+    if (input.sentCopy) return input.sentCopy;
+    if (input.appendToSent === undefined) return undefined;
+    return input.appendToSent ? 'append' : 'off';
+}
 
 export interface MailMessageSync {
     uid: number;
@@ -61,7 +77,7 @@ interface AccountRow {
     smtpJson: string;
     initialSyncDays: number;
     syncIntervalMinutes: number;
-    appendToSent: number;
+    sentCopy: MailSentCopy;
     enabled: number;
     lastSyncedAt: string | null;
     lastError: string | null;
@@ -71,7 +87,7 @@ interface AccountRow {
 
 const ACCOUNT_COLUMNS = `id, label, address, username, password_ref AS passwordRef, imap_json AS imapJson,
     smtp_json AS smtpJson, initial_sync_days AS initialSyncDays, sync_interval_minutes AS syncIntervalMinutes,
-    append_to_sent AS appendToSent, enabled, last_synced_at AS lastSyncedAt, last_error AS lastError,
+    sent_copy AS sentCopy, enabled, last_synced_at AS lastSyncedAt, last_error AS lastError,
     created_at AS createdAt, updated_at AS updatedAt`;
 
 function toAccount(row: AccountRow): MailAccountRecord {
@@ -85,7 +101,7 @@ function toAccount(row: AccountRow): MailAccountRecord {
         smtp: JSON.parse(row.smtpJson) as MailAccount['smtp'],
         initialSyncDays: row.initialSyncDays,
         syncIntervalMinutes: row.syncIntervalMinutes,
-        appendToSent: row.appendToSent === 1,
+        sentCopy: row.sentCopy,
         enabled: row.enabled === 1,
         lastSyncedAt: row.lastSyncedAt,
         lastError: row.lastError,
@@ -109,14 +125,15 @@ export function createMailRepository(conn: Connection, now: () => Date) {
         ),
         insert: sqlite.prepare(
             `INSERT INTO mail_accounts (id, owner_id, label, address, username, password_ref, imap_json, smtp_json,
-               initial_sync_days, sync_interval_minutes, append_to_sent, enabled, created_at, updated_at)
+               initial_sync_days, sync_interval_minutes, append_to_sent, sent_copy, enabled, created_at, updated_at)
              VALUES (@id, @ownerId, @label, @address, @username, @passwordRef, @imap, @smtp, @initialSyncDays,
-               @syncIntervalMinutes, @appendToSent, @enabled, @at, @at)`,
+               @syncIntervalMinutes, @appendToSent, @sentCopy, @enabled, @at, @at)`,
         ),
         update: sqlite.prepare(
             `UPDATE mail_accounts SET label = @label, address = @address, username = @username,
                password_ref = @passwordRef, imap_json = @imap, smtp_json = @smtp, initial_sync_days = @initialSyncDays,
-               sync_interval_minutes = @syncIntervalMinutes, append_to_sent = @appendToSent, enabled = @enabled,
+               sync_interval_minutes = @syncIntervalMinutes, append_to_sent = @appendToSent, sent_copy = @sentCopy,
+               enabled = @enabled,
                next_sync_at = NULL, failures = 0, updated_at = @at
              WHERE id = @id`,
         ),
@@ -225,6 +242,7 @@ export function createMailRepository(conn: Connection, now: () => Date) {
         },
         create(ownerId: string, input: MailAccountCreate): MailAccountRecord {
             const id = newId(now());
+            const sentCopy = explicitSentCopy(input) ?? 'auto';
             q.insert.run({
                 id,
                 ownerId,
@@ -236,7 +254,9 @@ export function createMailRepository(conn: Connection, now: () => Date) {
                 smtp: JSON.stringify(input.smtp),
                 initialSyncDays: input.initialSyncDays,
                 syncIntervalMinutes: input.syncIntervalMinutes,
-                appendToSent: input.appendToSent ? 1 : 0,
+                // 旧列只写不读(迁移 0011)
+                appendToSent: sentCopy === 'off' ? 0 : 1,
+                sentCopy,
                 enabled: input.enabled ? 1 : 0,
                 at: now().toISOString(),
             });
@@ -246,7 +266,7 @@ export function createMailRepository(conn: Connection, now: () => Date) {
         update(ownerId: string, id: string, patch: MailAccountPatch): MailAccountRecord | null {
             const current = this.get(ownerId, id);
             if (!current) return null;
-            const next = { ...current, ...patch };
+            const next = { ...current, ...patch, sentCopy: explicitSentCopy(patch) ?? current.sentCopy };
             q.update.run({
                 id,
                 label: next.label,
@@ -257,7 +277,8 @@ export function createMailRepository(conn: Connection, now: () => Date) {
                 smtp: JSON.stringify(next.smtp),
                 initialSyncDays: next.initialSyncDays,
                 syncIntervalMinutes: next.syncIntervalMinutes,
-                appendToSent: next.appendToSent ? 1 : 0,
+                appendToSent: next.sentCopy === 'off' ? 0 : 1,
+                sentCopy: next.sentCopy,
                 enabled: next.enabled ? 1 : 0,
                 at: now().toISOString(),
             });

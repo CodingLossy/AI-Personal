@@ -101,6 +101,41 @@ describe('邮件账户', () => {
         expect((await send('GET', `/api/v1/mail/accounts/${body.id}`)).status).toBe(404);
     });
 
+    it('「已发送」副本策略:不指定时为 auto,按主机算出 appendToSent;显式设置在任何主机上都保留', async () => {
+        const { send } = await setup(async () => {
+            throw new Error('unexpected');
+        });
+        const netease = { ...account, imap: { ...account.imap, host: 'imap.163.com' } };
+        const create = async (body: unknown) =>
+            MailAccount.parse(await (await send('POST', '/api/v1/mail/accounts', body)).json());
+        const patch = async (id: string, body: unknown) =>
+            MailAccount.parse(await (await send('PATCH', `/api/v1/mail/accounts/${id}`, body)).json());
+
+        // 新账户(Web 不再传 appendToSent)
+        const auto163 = await create(netease);
+        expect(auto163).toMatchObject({ sentCopy: 'auto', appendToSent: false });
+        expect(await create(account)).toMatchObject({ sentCopy: 'auto', appendToSent: true }); // 自定义主机
+        // 显式的 appendToSent / sentCopy 不被主机覆盖;两者都给时以 sentCopy 为准
+        expect(await create({ ...netease, appendToSent: true })).toMatchObject({
+            sentCopy: 'append',
+            appendToSent: true,
+        });
+        expect(await create({ ...account, appendToSent: false })).toMatchObject({
+            sentCopy: 'off',
+            appendToSent: false,
+        });
+        expect(await create({ ...account, appendToSent: true, sentCopy: 'off' })).toMatchObject({ sentCopy: 'off' });
+
+        expect(await patch(auto163.id, { appendToSent: true })).toMatchObject({
+            sentCopy: 'append',
+            appendToSent: true,
+        });
+        // 只改别的字段时策略不变
+        expect(await patch(auto163.id, { label: '163' })).toMatchObject({ sentCopy: 'append' });
+        expect(await patch(auto163.id, { sentCopy: 'auto' })).toMatchObject({ sentCopy: 'auto', appendToSent: false });
+        expect((await send('PATCH', `/api/v1/mail/accounts/${auto163.id}`, { sentCopy: 'always' })).status).toBe(400);
+    });
+
     it('同步写入缓存;同一账户同时触发两次只跑一次;失败时记录已脱敏的错误', async () => {
         let calls = 0;
         let fail = false;
