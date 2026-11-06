@@ -52,7 +52,7 @@
 |---|---|---|
 | 对话 | 流式对话、多会话、Markdown/代码渲染、附件、上下文压缩 | 分支对话、会话搜索、导出 |
 | 模型 | BYO OpenAI 兼容端点、多配置档、Anthropic/Gemini 原生 | 按任务自动路由、成本统计(本地)、本地模型一键检测 |
-| 记忆 | M1:记忆 v1(`memory.save / memory.search`,FTS 检索,写入需审批);M2:记忆 v2——有类型(经历/事实/方法/决策)、单值事实可更替且保留历史、每条带出处、FTS+向量+图三路召回、可信度说明、会话开头 digest、衰减与分层、用户反馈、凭据拒存与写入时脱敏(见《记忆模块补充设计》、ADR 0007)| 记忆整理(sleep)任务、按项目分区、M10 记忆簇与会话地图可视化 |
+| 记忆 | M1:记忆 v1(`memory.save / memory.search`,FTS 检索,写入需审批);M2:记忆 v2——有类型(经历/事实/方法/决策)、单值事实可更替且保留历史、每条带出处、FTS+向量+图三路召回、可信度说明、会话开头 digest、衰减与分层、用户反馈、凭据拒存与写入时脱敏(见《记忆模块补充设计》、ADR 0007)| 记忆整理(sleep)任务与生成日志(M6)、按项目分区、M10 记忆簇与会话地图可视化 |
 | 本地文件 | 授权目录内读/写/搜索、PDF/Office/图片解析、本地知识库 RAG | 文件监听自动入库、OCR |
 | 邮件 | IMAP 收、SMTP 发(发送需确认)、摘要、草稿 | Gmail/Outlook OAuth、规则自动化 |
 | 语音 | STT(云端 API 或本地 whisper)、TTS、按住说话 | 实时语音对话、唤醒词(桌面) |
@@ -421,6 +421,7 @@ CREATE INDEX idx_items_type ON items(owner_id, type, updated_at);
 - **企业微信**:自建应用/群机器人回调(消息加解密、被动回复 + 主动推送)。
 - **微信个人号**:基于腾讯官方 iLink / ClawBot 协议(扫码授权、长轮询),参考业主已有的 wechat-ilink 桥接项目;不使用非官方 hook 协议。
 - **知识地图分类浏览器(v1.0 版,见 4.1.1)**:`CategoryBrowser` 完整版——懒加载树 + 虚拟滚动列表 + 面包屑 + 计数徽标 + 条目详情(打开 / 问 AI)+ 子树内搜索 + 手机响应式;`characters` 提供者;IM 渠道支持 `/map` 指令(文本列出顶层类别与子项编号,回复编号下钻)。粒子球导航**不在 1.0 范围**,留到 M10。
+- **记忆召回超时(小改动,不改存储)**:`retrieve` 设总时限(建议 600 ms),查询嵌入单独设上限(建议 400 ms);超时就跳过向量这一路,只用全文 + 图,和没有 embed 配置档时一样降级;`memory-used` 事件增加可选字段 `omitted` / `degraded`。IM 渠道对首字延迟更敏感,所以放在 M5。
 - 远程:Docker 一键部署文档(2GB 机器配置建议、Caddy 自动 HTTPS、DNSPod DNS 验证示例);Web UI 响应式适配手机。
 - 发布:Docker 镜像(amd64/arm64)到 GHCR、v1.0 Release Notes、README 快速开始。
 - **验收**:在 2C2G 机器上 `docker compose up -d` 后,通过 HTTPS 域名登录使用;**企业微信与微信两个渠道**均可收发并完成一次审批;Web UI 知识地图可从任一顶层类别(邮件/小说/人物)下钻到最深条目并打开或「问 AI」,全程只用 REST;空闲 RSS < 200MB、对话中峰值 < 400MB。
@@ -437,6 +438,9 @@ CREATE INDEX idx_items_type ON items(owner_id, type, updated_at);
 - 任务模型:触发器(cron / 一次性时间 / 事件:新邮件、文件变化、Webhook)+ 动作(一段提示词交给 Agent,或固定工具链)+ 输出去向(会话、IM 渠道推送、邮件)。
 - 自然语言创建:「每天早上 8 点把未读邮件摘要发到微信」→ 解析为任务并让用户确认。
 - 运行记录、失败重试、并发限制、静默时段;离线错过的任务按策略补跑或跳过。
+- **记忆整理与生成溯源**(记忆的 L2 层;对照 TencentDB Agent Memory 后补入,ADR 0007 第 5.1 节):
+  - `memory.sleep` 整理:产物仍是 `memory_facts(origin = 'consolidated')`,建 `derived` 边,走同一条写入路径(凭据拒存、脱敏、sensitivity、不可信来源进隔离区);digest 继续按规则生成,不用 LLM 改写画像。
+  - 生成日志:新增 `memory_extract_runs`(运行 id、会话 / run、配置档与模型、`prompt_version` = 提示词哈希、状态、写入 / 隔离 / 拒存计数、错误码),自动抽取与 sleep 都写这张表;`memory_sources` 加可为空的 `extract_run_id`;`GET /memory/{id}/sources` 返回这次运行的信息。只存 id、计数和错误码,不存正文或模型输出。
 - **验收**:任务在重启后持久;时区正确(用户时区可配);推送到渠道成功;无人值守任务中的高风险工具仍按策略审批(可设置「预授权」白名单)。
 
 ### M7 · 插件系统与插件市场(约 2–3 周)
