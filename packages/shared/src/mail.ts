@@ -54,7 +54,11 @@ export type MailAddress = z.infer<typeof MailAddress>;
  * - `off`:从不 APPEND。
  * 服务器自己保存的那一份不经过 AI-Personal,AI-Personal 也不核实它是否存在。
  */
-export const MailSentCopy = z.enum(['auto', 'append', 'off']);
+export const MailSentCopy = z
+    .enum(['auto', 'append', 'off'])
+    .describe(
+        'Sent copy policy (ADR 0016 §14). auto: no APPEND on imap.163.com / imap.gmail.com, which save mail sent over SMTP themselves; APPEND on every other host. append: always APPEND. off: never APPEND. A copy the server saves by itself is not checked.',
+    );
 export type MailSentCopy = z.infer<typeof MailSentCopy>;
 
 /** 未知字段一律拒绝,避免客户端误把明文密码放进其他字段后被静默丢弃(与 ModelProfileInput 一致)。 */
@@ -75,7 +79,12 @@ const MailAccountFields = z.strictObject({
      * 显式指定发送后是否由 AI-Personal APPEND 一份到「已发送」(true = `sentCopy: 'append'`,false = `'off'`)。
      * 不给且不给 `sentCopy` 时为 `'auto'`。两者都给时以 `sentCopy` 为准。ADR 0016 第 6、14 节。
      */
-    appendToSent: z.boolean().optional(),
+    appendToSent: z
+        .boolean()
+        .optional()
+        .describe(
+            'Explicit switch: true = sentCopy append, false = sentCopy off. If neither this nor sentCopy is given, a new account gets auto. sentCopy wins if both are given.',
+        ),
     /** 发送后「已发送」副本的策略;不给时为 `'auto'`(ADR 0016 第 14 节)。 */
     sentCopy: MailSentCopy.optional(),
     enabled: z.boolean().default(true),
@@ -94,7 +103,12 @@ export const MailAccountPatch = z.strictObject({
     smtp: MailServer.optional(),
     initialSyncDays: z.number().int().min(1).max(365).optional(),
     syncIntervalMinutes: z.number().int().min(5).max(1440).optional(),
-    appendToSent: z.boolean().optional(),
+    appendToSent: z
+        .boolean()
+        .optional()
+        .describe(
+            'Explicit switch: true = sentCopy append, false = sentCopy off. Omit both to keep the current policy.',
+        ),
     sentCopy: MailSentCopy.optional(),
     enabled: z.boolean().optional(),
 });
@@ -109,7 +123,11 @@ export const MailAccount = MailAccountFields.extend({
     /** 账户保存的策略:`auto`(按服务器决定)、`append`(总是 APPEND)或 `off`(从不 APPEND)。 */
     sentCopy: MailSentCopy,
     /** 按当前策略与 IMAP 主机,发送成功后 AI-Personal 是否会 APPEND 一份(只读的计算结果)。 */
-    appendToSent: z.boolean(),
+    appendToSent: z
+        .boolean()
+        .describe(
+            'Read only: whether AI-Personal will APPEND a copy to Sent after sending, computed from sentCopy and the IMAP host.',
+        ),
     /** 最近一次同步的时间与错误摘要(人能看懂、已脱敏)。 */
     lastSyncedAt: IsoDateTime.nullable(),
     lastError: z.string().max(500).nullable(),
@@ -253,7 +271,11 @@ export const MailPreset = z.object({
     imap: MailServer,
     smtp: MailServer,
     /** 只作说明:`auto` 策略在这个主机上是否 APPEND(163 与 Gmail 会自动保存,为 false)。新建账户不必传它。 */
-    appendToSent: z.boolean(),
+    appendToSent: z
+        .boolean()
+        .describe(
+            'Informational: whether the auto policy appends on this host (false for 163 and Gmail). Not needed when adding an account.',
+        ),
     /** 如何开启 IMAP 与取得授权码 / 应用专用密码。 */
     help: z.string(),
 });

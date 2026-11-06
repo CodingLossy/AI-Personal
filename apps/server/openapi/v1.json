@@ -29610,7 +29610,8 @@
                             "additionalProperties": false
                           },
                           "appendToSent": {
-                            "type": "boolean"
+                            "type": "boolean",
+                            "description": "Informational: whether the auto policy appends on this host (false for 163 and Gmail). Not needed when adding an account."
                           },
                           "help": {
                             "type": "string"
@@ -29939,7 +29940,8 @@
                             "default": 5
                           },
                           "appendToSent": {
-                            "type": "boolean"
+                            "type": "boolean",
+                            "description": "Read only: whether AI-Personal will APPEND a copy to Sent after sending, computed from sentCopy and the IMAP host."
                           },
                           "sentCopy": {
                             "type": "string",
@@ -29947,7 +29949,8 @@
                               "auto",
                               "append",
                               "off"
-                            ]
+                            ],
+                            "description": "Sent copy policy (ADR 0016 §14). auto: no APPEND on imap.163.com / imap.gmail.com, which save mail sent over SMTP themselves; APPEND on every other host. append: always APPEND. off: never APPEND. A copy the server saves by itself is not checked."
                           },
                           "enabled": {
                             "type": "boolean",
@@ -30318,7 +30321,8 @@
                     "default": 5
                   },
                   "appendToSent": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "description": "Explicit switch: true = sentCopy append, false = sentCopy off. If neither this nor sentCopy is given, a new account gets auto. sentCopy wins if both are given."
                   },
                   "sentCopy": {
                     "type": "string",
@@ -30326,7 +30330,8 @@
                       "auto",
                       "append",
                       "off"
-                    ]
+                    ],
+                    "description": "Sent copy policy (ADR 0016 §14). auto: no APPEND on imap.163.com / imap.gmail.com, which save mail sent over SMTP themselves; APPEND on every other host. append: always APPEND. off: never APPEND. A copy the server saves by itself is not checked."
                   },
                   "enabled": {
                     "type": "boolean",
@@ -30445,7 +30450,8 @@
                       "default": 5
                     },
                     "appendToSent": {
-                      "type": "boolean"
+                      "type": "boolean",
+                      "description": "Read only: whether AI-Personal will APPEND a copy to Sent after sending, computed from sentCopy and the IMAP host."
                     },
                     "sentCopy": {
                       "type": "string",
@@ -30453,7 +30459,8 @@
                         "auto",
                         "append",
                         "off"
-                      ]
+                      ],
+                      "description": "Sent copy policy (ADR 0016 §14). auto: no APPEND on imap.163.com / imap.gmail.com, which save mail sent over SMTP themselves; APPEND on every other host. append: always APPEND. off: never APPEND. A copy the server saves by itself is not checked."
                     },
                     "enabled": {
                       "type": "boolean",
@@ -30921,7 +30928,8 @@
                       "default": 5
                     },
                     "appendToSent": {
-                      "type": "boolean"
+                      "type": "boolean",
+                      "description": "Read only: whether AI-Personal will APPEND a copy to Sent after sending, computed from sentCopy and the IMAP host."
                     },
                     "sentCopy": {
                       "type": "string",
@@ -30929,7 +30937,8 @@
                         "auto",
                         "append",
                         "off"
-                      ]
+                      ],
+                      "description": "Sent copy policy (ADR 0016 §14). auto: no APPEND on imap.163.com / imap.gmail.com, which save mail sent over SMTP themselves; APPEND on every other host. append: always APPEND. off: never APPEND. A copy the server saves by itself is not checked."
                     },
                     "enabled": {
                       "type": "boolean",
@@ -31392,7 +31401,8 @@
                     "maximum": 1440
                   },
                   "appendToSent": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "description": "Explicit switch: true = sentCopy append, false = sentCopy off. Omit both to keep the current policy."
                   },
                   "sentCopy": {
                     "type": "string",
@@ -31400,7 +31410,8 @@
                       "auto",
                       "append",
                       "off"
-                    ]
+                    ],
+                    "description": "Sent copy policy (ADR 0016 §14). auto: no APPEND on imap.163.com / imap.gmail.com, which save mail sent over SMTP themselves; APPEND on every other host. append: always APPEND. off: never APPEND. A copy the server saves by itself is not checked."
                   },
                   "enabled": {
                     "type": "boolean"
@@ -31510,7 +31521,8 @@
                       "default": 5
                     },
                     "appendToSent": {
-                      "type": "boolean"
+                      "type": "boolean",
+                      "description": "Read only: whether AI-Personal will APPEND a copy to Sent after sending, computed from sentCopy and the IMAP host."
                     },
                     "sentCopy": {
                       "type": "string",
@@ -31518,7 +31530,8 @@
                         "auto",
                         "append",
                         "off"
-                      ]
+                      ],
+                      "description": "Sent copy policy (ADR 0016 §14). auto: no APPEND on imap.163.com / imap.gmail.com, which save mail sent over SMTP themselves; APPEND on every other host. append: always APPEND. off: never APPEND. A copy the server saves by itself is not checked."
                     },
                     "enabled": {
                       "type": "boolean",
