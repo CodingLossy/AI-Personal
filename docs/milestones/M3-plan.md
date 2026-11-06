@@ -1,6 +1,6 @@
 # M3 实施方案:邮件
 
-- 状态:已批准(业主 2026-11-05,第 5 节的问题全部已定);进度:PR 1–3 已合并(#35–#37,163 邮箱真机测试通过),PR 4 进行中
+- 状态:已批准(业主 2026-11-05,第 5 节的问题全部已定);进度:PR 1–4 已合并(#35–#38,163 邮箱真机测试通过),PR 5(#40)审阅中
 - 来源:GitHub issue #34,并按评审意见修订(2026-11-05:只从草稿发送、联系人推迟到 M5、发出后 APPEND 到「已发送」、会话级污染判断、同步细节补充)
 - 日期:2026-11-04
 - 基线:`main` @ `f6845d3`(M2 已完成,#1–#33)
@@ -24,13 +24,13 @@ M3 要让助手能读邮件、总结邮件、起草回复,并在用户确认后�
 
 ## 1. PR 顺序
 
-| #   | 分支                     | 范围(摘要)                                                               | 依赖 |
-| --- | ------------------------ | ------------------------------------------------------------------------ | ---- |
-| 1   | `docs/m3-mail-contracts` | 本方案定稿、ADR 0016(邮件)、shared 中的邮件 schema 与审批警告字段        | —    |
-| 2   | `feat/mail-sync`         | 迁移、IMAP 增量同步(含 FLAGS 与删除)、本地缓存、账户 REST、连接测试      | 1    |
-| 3   | `feat/mail-tools`        | `mail.*` 工具、只从草稿发送、APPEND 到已发送、会话级污染、注入防护与评测 | 2    |
-| 4   | `feat/mail-items`        | `mail` ItemProvider、附件进知识库、Web 最简邮件页与账户设置              | 2、3 |
-| 5   | `docs/m3-wrapup`         | 评测集、性能与内存测量、文档、CHANGELOG、M3 自检报告                     | 全部 |
+| #   | 分支                     | 范围(摘要)                                                                                                    | 依赖 |
+| --- | ------------------------ | ------------------------------------------------------------------------------------------------------------- | ---- |
+| 1   | `docs/m3-mail-contracts` | 本方案定稿、ADR 0016(邮件)、shared 中的邮件 schema 与审批警告字段                                             | —    |
+| 2   | `feat/mail-sync`         | 迁移、IMAP 增量同步(含 FLAGS 与删除)、本地缓存、账户 REST、连接测试                                           | 1    |
+| 3   | `feat/mail-tools`        | `mail.*` 工具、只从草稿发送、APPEND 到已发送、会话级污染、注入防护与评测                                      | 2    |
+| 4   | `feat/mail-items`        | `mail` ItemProvider、附件进知识库、Web 最简邮件页与账户设置                                                   | 2、3 |
+| 5   | `docs/m3-wrapup`         | 评测集、性能与内存测量、文档、CHANGELOG、M3 自检报告;真机发信发现的两项修复(「已发送」副本策略、多文件夹筛选) | 全部 |
 
 3 和 4 都只依赖 2,按 3 → 4 的顺序做,因为 4 的「问 AI」要用到 3 的工具。
 
@@ -45,7 +45,7 @@ M3 要让助手能读邮件、总结邮件、起草回复,并在用户确认后�
   - 只同步收件箱与已发送(按 special-use 识别);同一 `Message-ID` 在一个账户内只保存一份。
   - 读取用 `BODY.PEEK`,不改变服务器上的已读状态;对服务器唯一的写操作是发送成功后把邮件 APPEND 到「已发送」。
   - 会话串、不可信内容包装(ADR 0010 第 7 节)、会话级污染、只从草稿发送、审批警告。
-- **shared**:`MailAccount`(含 `appendToSent`)、`MailFolder`、`MailMessage`、`MailThread`、`MailDraft`(含附件引用)、`MailSendInput`(只有 `draftId`);`ApprovalWarning`,作为 `approval-required` 事件与 `ApprovalRequest` 的可选字段 `warnings`;`ItemSource` 列出 `mail`。均为向后兼容的增量修改。
+- **shared**:`MailAccount`(含 `appendToSent`;PR 5 增加 `MailSentCopy` 与 `sentCopy`,`appendToSent` 在响应中改为计算结果,见 ADR 0016 第 14 节)、`MailFolder`、`MailMessage`、`MailThread`、`MailDraft`(含附件引用)、`MailSendInput`(只有 `draftId`);`ApprovalWarning`,作为 `approval-required` 事件与 `ApprovalRequest` 的可选字段 `warnings`;`ItemSource` 列出 `mail`。均为向后兼容的增量修改。
 - 验收:schema 单测;OpenAPI 只有增量变化(oasdiff 通过);业主审阅 ADR。
 
 ### PR 2 · `feat/mail-sync`
@@ -110,13 +110,18 @@ M3 要让助手能读邮件、总结邮件、起草回复,并在用户确认后�
 
 - 评测集合并、`pnpm eval` 通过;同步与对话时的内存峰值测量(10k 封邮件);有账户时的空闲 RSS。
 - README、CHANGELOG、`docs/milestones/M3-self-check.md`(验收对照、推迟项)。
+- Shy 真机发信测试发现的两项缺陷(ADR 0016 第 14 节):
+  - **「已发送」副本策略**:`sentCopy`(`auto` / `append` / `off`)取代布尔的 `appendToSent` 默认值;`auto` 对 163 / Gmail 不 APPEND,显式设置在任何主机上都生效。迁移 0011:旧的 `true` 记为 `auto`,`false` 记为 `off`(业主 2026-11-06 确认)。`mail.send` 结果中的 `savedToSent` 只表示 AI-Personal 的 APPEND 成功,新字段 `sentCopy` 说明实际处理。
+  - **多文件夹筛选**:按收件箱 / 已发送筛选时取邮件在该类文件夹中的位置,同时在两边的邮件(发给自己)两边都列出。
+- 契约与 OpenAPI(增量):`MailSentCopy`;`MailAccountInput` / `MailAccountPatch` 增加可选的 `sentCopy`,`appendToSent` 不再默认 `true`;`MailAccount` 增加 `sentCopy`,`appendToSent` 为只读的计算结果;相关字段在 `openapi/v1.json` 中带说明。oasdiff 通过。
+- 1 万封邮件同步的内存峰值没有测(本轮不做内存优化),在自检中列为开放项。
 
 ## 3. 安全检查清单(每个 PR 都要过)
 
 - 密码只以引用形式保存,不进日志、响应、审计和导出。
 - 邮件内容全程带「不可信」标记,不被当成指令;读过之后整个会话都算被污染。
 - `mail.send` 只发草稿、每次审批、不可预授权,卡片信息完整。
-- 对服务器只有一种写操作:发送后 APPEND 到「已发送」。
+- 对服务器只有一种写操作:发送后按「已发送」副本策略 APPEND 到「已发送」(服务器自动保存的那一份不由 AI-Personal 写入)。
 - 没有账户时不加载邮件相关依赖。
 - 新依赖都是宽松许可证,SPDX 头齐全,提交作者署名正确。
 
